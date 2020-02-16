@@ -1,0 +1,16 @@
+{
+  "name": "my-gantt-viewer",
+  "version": "0.0.1",
+  "engines": {
+    "node": "12.x"
+  },
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ejs": "^2.5.6",
+    "express": "^4.15.2"
+  },
+  "license": "MIT"
+}
