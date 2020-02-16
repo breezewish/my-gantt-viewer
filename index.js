@@ -19,21 +19,16 @@ function NewOctokit(token) {
   });
 }
 
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'dist')));
+
 app.use(cookieSession({
   name: 'session',
   keys: [process.env.SESSION_SECRET],
   maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days
 }));
 
-app.get('/', (req, res) => {
-  res.render('index');
-});
-
-app.get('/view/:org/:repo', (req, res) => {
-  res.render('index');
+app.get('/view/*', (req, res) => {
+  res.sendFile(path.join(__dirname, '/dist/index.html'));
 });
 
 app.get('/github/signin', (req, res) => {
@@ -41,7 +36,7 @@ app.get('/github/signin', (req, res) => {
   const githubAuthUrl = 'https://github.com/login/oauth/authorize?' +
     qs.stringify({
       client_id: process.env.CLIENT_ID,
-      redirect_uri: process.env.HOST + '/github/callback',
+      redirect_uri: process.env.SERVER_HOST + '/github/callback',
       state: req.session.oAuthState,
       scope: 'read:user user:email'
     });
@@ -54,7 +49,7 @@ async function acquireOAuthToken(code, state) {
     url: 'https://github.com/login/oauth/access_token?' + qs.stringify({
       client_id: process.env.CLIENT_ID,
       client_secret: process.env.CLIENT_SECRET,
-      redirect_uri: process.env.HOST + '/github/callback',
+      redirect_uri: process.env.SERVER_HOST + '/github/callback',
       code,
       state,
     }),

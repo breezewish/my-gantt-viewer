@@ -6,17 +6,32 @@
   },
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "ui:serve": "vue-cli-service serve",
+    "ui:build": "vue-cli-service build",
+    "heroku-postbuild": "npm run ui:build"
   },
   "dependencies": {
     "@octokit/rest": "^16.43.1",
     "axios": "^0.19.2",
     "cookie-session": "^1.4.0",
+    "core-js": "^3.6.4",
     "dotenv": "^8.2.0",
-    "ejs": "^3.0.1",
     "express": "^4.15.2",
     "randomstring": "^1.1.5",
-    "signale": "^1.4.0"
+    "signale": "^1.4.0",
+    "vue": "^2.6.11"
+  },
+  "devDependencies": {
+    "@vue/cli-plugin-babel": "~4.2.0",
+    "@vue/cli-plugin-eslint": "~4.2.0",
+    "@vue/cli-service": "~4.2.0",
+    "babel-eslint": "^10.0.3",
+    "eslint": "^6.7.2",
+    "eslint-plugin-vue": "^6.1.2",
+    "less": "^3.0.4",
+    "less-loader": "^5.0.0",
+    "vue-template-compiler": "^2.6.11"
   },
   "license": "MIT",
   "signale": {
