@@ -9,8 +9,27 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "ejs": "^2.5.6",
-    "express": "^4.15.2"
+    "@octokit/rest": "^16.43.1",
+    "axios": "^0.19.2",
+    "cookie-session": "^1.4.0",
+    "dotenv": "^8.2.0",
+    "ejs": "^3.0.1",
+    "express": "^4.15.2",
+    "randomstring": "^1.1.5",
+    "signale": "^1.4.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "signale": {
+    "displayScope": true,
+    "displayBadge": true,
+    "displayDate": true,
+    "displayFilename": false,
+    "displayLabel": true,
+    "displayTimestamp": true,
+    "underlineLabel": true,
+    "underlineMessage": false,
+    "underlinePrefix": false,
+    "underlineSuffix": false,
+    "uppercaseLabel": false
+  }
 }
