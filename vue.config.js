@@ -1,6 +1,9 @@
+const serveApi = require('./api');
+
 module.exports = {
   lintOnSave: false,
   devServer: {
-    proxy: 'http://localhost:5000',
+    before: serveApi,
+    port: 5000,
   },
-}
+};
