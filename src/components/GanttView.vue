@@ -50,6 +50,13 @@
         icon-left="chevron-down"
         >Expand All</b-button
       >
+      <b-button
+        size="is-small"
+        type="is-text"
+        @click="reload"
+        icon-left="refresh"
+        >Reload</b-button
+      >
     </div>
   </div>
 </template>
@@ -91,6 +98,7 @@ export default {
     };
   },
   async mounted() {
+    gantt.clearAll();
     gantt.config.readonly = true;
     gantt.ext.zoom.init({
       levels: [
@@ -236,24 +244,8 @@ export default {
       }
       return true;
     });
-    gantt.clearAll();
 
-    try {
-      const data = await this.loadData();
-      gantt.parse(data);
-    } catch (e) {
-      console.error(e);
-      this.$buefy.toast.open({
-        duration: 3000,
-        message: `Failed to load project or issues`,
-        position: 'is-bottom',
-        type: 'is-danger',
-        queue: false,
-      });
-    }
-
-    this.loadingAll = 0;
-    this.loadingFinished = 0;
+    this.reload();
   },
   beforeDestroy() {
     if (this.todayMarker) {
@@ -292,6 +284,23 @@ export default {
         task.$open = true;
       });
       gantt.render();
+    },
+    async reload() {
+      try {
+        const data = await this.loadData();
+        gantt.parse(data);
+      } catch (e) {
+        console.error(e);
+        this.$buefy.toast.open({
+          duration: 3000,
+          message: `Failed to load project or issues`,
+          position: 'is-bottom',
+          type: 'is-danger',
+          queue: false,
+        });
+      }
+      this.loadingAll = 0;
+      this.loadingFinished = 0;
     },
     async loadData() {
       this.loadingAll = 2;
