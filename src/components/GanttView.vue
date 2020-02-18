@@ -98,7 +98,6 @@ export default {
     };
   },
   async mounted() {
-    gantt.clearAll();
     gantt.config.readonly = true;
     gantt.ext.zoom.init({
       levels: [
@@ -230,7 +229,9 @@ export default {
     gantt.config.row_height = 30;
     gantt.config.fit_tasks = true;
     gantt.ext.zoom.setLevel('months');
+
     gantt.init(this.$refs.gantt);
+
     this.todayMarker = gantt.addMarker({
       start_date: new Date(),
       text: 'Today',
@@ -256,6 +257,7 @@ export default {
       gantt.detachEvent(this.ganttClickEvent);
       this.ganttClickEvent = null;
     }
+    gantt.clearAll();
   },
   methods: {
     updateCanZoomInOut: function() {

@@ -44,7 +44,6 @@ export default {
       if (resp.data && resp.data.accessToken) {
         console.log(resp.data);
         this.sessionInfo = resp.data;
-        this.$octoClient.setToken(resp.data.accessToken);
       }
     } catch (e) {
       if (e.status !== 403) {

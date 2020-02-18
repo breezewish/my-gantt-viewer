@@ -14,6 +14,7 @@
           :loading="repoNavIsLoading > 0"
           field="display"
           @typing="searchRepos"
+          :disabled="!sessionInfo"
           size="is-small"
           style="width: 300px; margin-left: 5px;"
           :value="
@@ -69,6 +70,7 @@ export default {
       repoNavData: [],
       repoNavSelected: null,
       repoNavIsLoading: 0,
+      repoNavDataTimestamp: 0,
     };
   },
   props: ['repo', 'sessionInfo'],
@@ -89,7 +91,6 @@ export default {
       }
     },
     handleRepoChange: function(option) {
-      console.log('repoChange');
       if (!option) {
         return;
       }
@@ -102,12 +103,17 @@ export default {
       });
     },
     searchRepos: throttle(async function(name) {
+      if (!this.$props.sessionInfo) {
+        return;
+      }
       if (!name.length) {
+        this.repoNavDataTimestamp = Date.now();
         this.repoNavData = [];
         return;
       }
       this.repoNavIsLoading++;
       try {
+        const ts = Date.now();
         const query = await this.$octoClient.request(
           `
           query repos($name: String!) {
@@ -133,7 +139,13 @@ export default {
             name,
           }
         );
-        if (query && query.search && query.search.nodes) {
+        if (
+          query &&
+          query.search &&
+          query.search.nodes &&
+          ts > this.repoNavDataTimestamp
+        ) {
+          this.repoNavDataTimestamp = ts;
           this.repoNavData = [];
           query.search.nodes.forEach(node => {
             this.repoNavData.push({

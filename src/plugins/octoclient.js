@@ -1,20 +1,12 @@
-import { graphql } from '@octokit/graphql';
+import { Http } from 'vue-resource';
 
 class OctoClient {
-  constructor(token) {
-    this.setToken(token);
-  }
-
-  setToken(token) {
-    if (token) {
-      this.request = graphql.defaults({
-        headers: {
-          authorization: `token ${token}`,
-        },
-      });
-    } else {
-      this.request = graphql;
-    }
+  async request(query, parameters) {
+    const resp = await Http.post('/github/graphql', {
+      query,
+      parameters,
+    });
+    return resp.body;
   }
 }
 

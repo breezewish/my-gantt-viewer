@@ -1,5 +1,7 @@
 const qs = require('querystring');
+const compression = require('compression');
 const randomString = require('randomstring');
+const bodyParser = require('body-parser');
 const axios = require('axios');
 const cookieSession = require('cookie-session');
 const { graphql } = require('@octokit/graphql');
@@ -61,6 +63,12 @@ function requireToken(req, res, next) {
 }
 
 module.exports = app => {
+  app.use(compression());
+
+  app.use(bodyParser.urlencoded({ extended: false }));
+
+  app.use(bodyParser.json());
+
   app.use(
     cookieSession({
       name: 'session',
@@ -124,31 +132,16 @@ module.exports = app => {
     });
   });
 
+  app.post('/github/graphql', requireToken, (req, res) => {
+    const client = NewOctoClient(req.session.accessToken);
+    client(req.body.query, req.body.parameters).then(
+      resp => res.json(resp),
+      err => res.status(err.status).end()
+    );
+  });
+
   app.post('/signout', requireToken, (req, res) => {
     req.session = null;
     res.json({});
   });
-
-  // app.get('/test/projects', requireToken, (req, res) => {
-  //   const octokit = NewOctokit(req.session.accessToken);
-  //   octokit.projects.listForRepo({
-  //     owner: 'pingcap-incubator',
-  //     repo: 'tidb-dashboard',
-  //   }).then(v => res.json(v.data));
-  // });
-
-  // app.get('/test/project/:id', requireToken, (req, res) => {
-  //   const octokit = NewOctokit(req.session.accessToken);
-  //   octokit.projects.listColumns({
-  //     project_id: req.params.id,
-  //   }).then(v => res.json(v.data));
-  // });
-
-  // app.get('/test/issues', requireToken, (req, res) => {
-  //   const octokit = NewOctokit(req.session.accessToken);
-  //   octokit.issues.listForRepo({
-  //     owner: 'pingcap-incubator',
-  //     repo: 'tidb-dashboard',
-  //   }).then(v => res.json(v.data));
-  // });
 };
