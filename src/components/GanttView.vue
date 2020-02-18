@@ -76,7 +76,7 @@ import { gantt } from 'dhtmlx-gantt';
 import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_tooltip.js';
 import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_marker.js';
 import moment from 'moment';
-import e from 'lodash/escape';
+import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
 
 const QUERY_FRAG_RATELIMIT = `
@@ -203,19 +203,27 @@ export default {
         tree: true,
         width: '*',
         template: task => {
-          return `<a href="${e(task.url)}" target="_blank">${e(task.text)}</a>`;
+          return html`
+            <a href="${task._src.url}" target="_blank">${task.text}</a>
+          `;
         },
       },
       {
         name: 'assignee',
         label: 'Assignee',
         template: task => {
-          if (task.assignee) {
-            return `<a href="https://github.com/${e(
-              task.assignee
-            )}" target="_blank"><small>${e(task.assignee)}</small></a>`;
+          if (task._src._ganttAssignee) {
+            return html`
+              <a
+                href="https://github.com/${task._src._ganttAssignee}"
+                target="_blank"
+                ><small>${task._src._ganttAssignee}</small></a
+              >
+            `;
           } else {
-            return '<small>(None)</small>';
+            return html`
+              <small>(None)</small>
+            `;
           }
         },
         width: 100,
@@ -231,6 +239,40 @@ export default {
           return 'kind-task';
           break;
       }
+    };
+    gantt.templates.tooltip_text = function(start, end, task) {
+      let template = html`
+        <div class="subtitle is-6" style="margin-bottom: 0.5rem">
+          ${task.text}
+        </div>
+      `;
+      template += html`
+        <div>
+          <b>Start date:</b> ${gantt.templates.tooltip_date_format(start)}
+        </div>
+      `;
+      template += html`
+        <div><b>End date:</b> ${gantt.templates.tooltip_date_format(end)}</div>
+      `;
+      template += html`
+        <div><b>Progress:</b> ${Math.round(task.progress * 100)}%</div>
+      `;
+      if (task._src._ganttAssignee) {
+        template += html`
+          <div><b>Assignee:</b> @${task._src._ganttAssignee}</div>
+        `;
+      }
+      if (task._src.milestone) {
+        template += html`
+          <div><b>Milestone:</b> ${task._src.milestone.title}</div>
+        `;
+      }
+      if (task._src.state) {
+        template += html`
+          <div><b>State:</b> ${task._src.state}</div>
+        `;
+      }
+      return template;
     };
     gantt.config.drag_links = false;
     gantt.config.task_height = 18;
@@ -379,9 +421,8 @@ export default {
           text: proj.name,
           type: 'project',
           open: true,
-          url: proj.url,
           readonly: true,
-          _proj: proj,
+          _src: proj,
         });
       });
       items.forEach(item => {
@@ -393,10 +434,8 @@ export default {
           end_date: item._ganttDue,
           progress: item._ganttProgress,
           parent: item.projectId,
-          assignee: item._ganttAssignee,
-          url: item.url,
           readonly: !item.viewerCanUpdate,
-          _item: item,
+          _src: item,
         });
       });
 
