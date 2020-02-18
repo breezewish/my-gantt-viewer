@@ -42,7 +42,6 @@ export default {
     try {
       const resp = await this.$http.get('/github/info');
       if (resp.data && resp.data.accessToken) {
-        console.log(resp.data);
         this.sessionInfo = resp.data;
       }
     } catch (e) {

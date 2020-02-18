@@ -18,8 +18,18 @@
       style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"
     ></div>
     <div
-      style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;"
+      style="position: absolute; left: 0; width: 100%; top: 0; height: 27px; z-index: 15;"
     >
+      <div style="display: inline-block; margin: 0 10px;">
+        <b-slider
+          size="is-small"
+          :value="columnWidth"
+          style="width: 100px; margin: 10px 0"
+          :min="100"
+          :max="700"
+          @change="updateColumnWidth"
+        />
+      </div>
       <b-button
         size="is-small"
         type="is-text"
@@ -67,6 +77,7 @@ import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_tooltip.js';
 import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_marker.js';
 import moment from 'moment';
 import e from 'lodash/escape';
+import forEach from 'lodash/forEach';
 
 const QUERY_FRAG_RATELIMIT = `
 rateLimit {
@@ -89,16 +100,15 @@ export default {
   props: ['org', 'repo'],
   data() {
     return {
-      todayMarker: null,
       canZoomIn: true,
       canZoomOut: true,
-      ganttClickEvent: null,
       loadingAll: 0,
       loadingFinished: 0,
+      columnWidth: 500,
     };
   },
   async mounted() {
-    gantt.config.readonly = true;
+    // gantt.config.readonly = true;
     gantt.ext.zoom.init({
       levels: [
         {
@@ -115,8 +125,8 @@ export default {
           name: 'days',
           scales: [
             { unit: 'month', step: 1, format: '%M' },
-            { unit: 'week', step: 1, format: '%W' },
-            { unit: 'day', step: 1, format: '%D' },
+            { unit: 'week', step: 1, format: 'Week %W' },
+            { unit: 'day', step: 1, format: '%d %D' },
           ],
           round_dnd_dates: true,
           min_column_width: 60,
@@ -127,7 +137,7 @@ export default {
           scales: [
             { unit: 'year', step: 1, format: '%Y' },
             { unit: 'month', step: 1, format: '%M' },
-            { unit: 'week', step: 1, format: '%W' },
+            { unit: 'week', step: 1, format: 'Week %W' },
           ],
           round_dnd_dates: false,
           min_column_width: 60,
@@ -209,6 +219,7 @@ export default {
           }
         },
         width: 100,
+        max_width: 200,
       },
     ];
     gantt.templates.task_class = function(start, end, task) {
@@ -221,46 +232,24 @@ export default {
           break;
       }
     };
-    gantt.config.scales = [
-      { unit: 'month', step: 1, format: '%F, %Y' },
-      { unit: 'day', step: 1, format: '%j, %D' },
-    ];
+    gantt.config.drag_links = false;
     gantt.config.task_height = 18;
     gantt.config.row_height = 30;
     gantt.config.fit_tasks = true;
+    gantt.config.grid_width = this.columnWidth;
+    gantt.config.details_on_dblclick = false;
     gantt.ext.zoom.setLevel('months');
 
     gantt.init(this.$refs.gantt);
-
-    this.todayMarker = gantt.addMarker({
-      start_date: new Date(),
-      text: 'Today',
-    });
-    this.ganttClickEvent = gantt.attachEvent('onTaskClick', function(id, e) {
-      if (e.target.className == 'gantt_task_content') {
-        const task = this.getTask(id);
-        if (task.url) {
-          window.open(task.url, '_blank');
-        }
-      }
-      return true;
-    });
-
     this.reload();
   },
-  beforeDestroy() {
-    if (this.todayMarker) {
-      gantt.deleteMarker(this.todayMarker);
-      this.todayMarker = null;
-    }
-    if (this.ganttClickEvent) {
-      gantt.detachEvent(this.ganttClickEvent);
-      this.ganttClickEvent = null;
-    }
-    gantt.clearAll();
-  },
   methods: {
-    updateCanZoomInOut: function() {
+    updateColumnWidth(width) {
+      this.columnWidth = width;
+      gantt.config.grid_width = width;
+      gantt.render();
+    },
+    updateCanZoomInOut() {
       var level = gantt.ext.zoom.getCurrentLevel();
       this.canZoomOut = !(level > 4);
       this.canZoomIn = !(level === 0);
@@ -289,8 +278,7 @@ export default {
     },
     async reload() {
       try {
-        const data = await this.loadData();
-        gantt.parse(data);
+        await this.loadData();
       } catch (e) {
         console.error(e);
         this.$buefy.toast.open({
@@ -307,6 +295,8 @@ export default {
     async loadData() {
       this.loadingAll = 2;
       const projects = await this.loadEnabledProjects();
+      // window.projects = JSON.stringify(projects, null, 4);
+      // const projects = require('./mock_projects.json');
       this.loadingFinished += 1;
       const projectIdArray = projects.map(p => p.id);
       if (projectIdArray.length == 0) {
@@ -315,9 +305,12 @@ export default {
           links: [],
         };
       }
-      // console.log(projects);
       const items = await this.loadProjectItems(projectIdArray);
+      // window.items = JSON.stringify(items, null, 4);
+      // const items = require('./mock_items.json');
       this.loadingFinished += 1;
+
+      const milestones = {};
 
       // calculate gantt properties
       items.forEach(item => {
@@ -369,10 +362,17 @@ export default {
         if (item.assignees.nodes.length > 0) {
           item._ganttAssignee = item.assignees.nodes[0].login;
         }
+
+        if (item.milestone) {
+          if (milestones[item.milestone.id] === undefined) {
+            milestones[item.milestone.id] = item.milestone;
+          }
+        }
       });
 
-      const data = [];
+      gantt.clearAll();
 
+      const data = [];
       projects.forEach(proj => {
         data.push({
           id: proj.id,
@@ -380,9 +380,10 @@ export default {
           type: 'project',
           open: true,
           url: proj.url,
+          readonly: true,
+          _proj: proj,
         });
       });
-
       items.forEach(item => {
         data.push({
           id: item.id,
@@ -394,13 +395,26 @@ export default {
           parent: item.projectId,
           assignee: item._ganttAssignee,
           url: item.url,
+          readonly: !item.viewerCanUpdate,
+          _item: item,
         });
       });
 
-      return {
-        data,
-        links: [],
-      };
+      gantt.parse({ data, links: [] });
+
+      gantt.addMarker({
+        start_date: new Date(),
+        text: 'Today',
+        css: 'today',
+      });
+
+      forEach(milestones, milestone => {
+        gantt.addMarker({
+          start_date: moment(milestone.dueOn),
+          text: milestone.title,
+          css: 'normal',
+        });
+      });
     },
     async loadEnabledProjects() {
       // Request project only, to avoid easily exceeding GitHub's estimate cost.
@@ -538,4 +552,18 @@ export default {
 
 <style>
 @import '~dhtmlx-gantt/codebase/dhtmlxgantt.css';
+</style>
+
+<style lang="scss">
+@import '@/variables.scss';
+
+.gantt_marker {
+  &.today {
+    background-color: rgba($black, 0.8);
+  }
+
+  &.normal {
+    background-color: rgba($orange, 0.6);
+  }
+}
 </style>
