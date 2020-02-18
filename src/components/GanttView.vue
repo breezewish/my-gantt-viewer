@@ -225,10 +225,10 @@ export default {
     gantt.templates.task_class = function(start, end, task) {
       switch (task.type) {
         case 'project':
-          return 'task-kind-project';
+          return 'kind-project';
           break;
         case 'task':
-          return 'task-kind-task';
+          return 'kind-task';
           break;
       }
     };
@@ -558,12 +558,43 @@ export default {
 @import '@/variables.scss';
 
 .gantt_marker {
+  pointer-events: none;
+
   &.today {
     background-color: rgba($black, 0.8);
   }
 
   &.normal {
     background-color: rgba($orange, 0.6);
+  }
+}
+
+.gantt_task_line {
+  border: 1px solid transparent;
+  border-radius: 0;
+
+  &.gantt_selected {
+    box-shadow: none;
+  }
+
+  &.kind-project {
+    background-color: #888;
+    .gantt_task_progress {
+      background-color: #444;
+    }
+    &.gantt_selected {
+      border: 1px solid #444;
+    }
+  }
+
+  &.kind-task {
+    background-color: rgba($blue, 0.3);
+    &.gantt_selected {
+      border: 1px solid $blue;
+    }
+    .gantt_task_progress {
+      background-color: $blue;
+    }
   }
 }
 </style>
