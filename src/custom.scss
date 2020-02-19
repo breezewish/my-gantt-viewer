@@ -6,6 +6,20 @@
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
 }
 
+.modal-card-head,
+.modal-card-foot {
+  background: #fff;
+  border: 0;
+}
+
+.modal-card-head {
+  padding-bottom: 0;
+}
+
+.modal-card-foot {
+  padding-top: 0;
+}
+
 html,
 body {
   height: 100%;

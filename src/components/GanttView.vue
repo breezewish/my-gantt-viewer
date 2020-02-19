@@ -2,9 +2,7 @@
   <div style="width: 100%; height: 100%; position: relative;">
     <b-modal :active="loadingAll > 0" :can-cancel="false">
       <div style="text-align: center; width: 300px; margin: 0 auto;">
-        <p style="margin-bottom: 10px;">
-          Loading data from GitHub...
-        </p>
+        <p style="margin-bottom: 10px;">Loading data from GitHub...</p>
         <b-progress
           :value="(loadingFinished / loadingAll) * 100"
           size="is-small"
@@ -13,15 +11,23 @@
         ></b-progress>
       </div>
     </b-modal>
-    <div
-      ref="gantt"
-      style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"
-    ></div>
-    <div
-      style="position: absolute; left: 0; width: 100%; top: 0; height: 27px; z-index: 15;"
+    <b-modal
+      :active.sync="isPreviewChangeDialogVisible"
+      has-modal-card
+      trap-focus
+      :can-cancel="false"
     >
+      <GanttChangePreviewDialog
+        :data="Object.values(pendingTaskChanges)"
+        @save="handleApplyPendingChanges"
+        :updating="isPreviewChangeDialogUpdating"
+      />
+    </b-modal>
+    <div ref="gantt" style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"></div>
+    <div style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;">
       <div style="display: inline-block; margin: 0 10px;">
         <b-slider
+          :tooltip="false"
           size="is-small"
           :value="columnWidth"
           style="width: 100px; margin: 10px 0"
@@ -36,37 +42,34 @@
         @click="zoomIn"
         :disabled="!canZoomIn"
         icon-left="plus"
-        >Zoom In</b-button
-      >
+      >Zoom In</b-button>
       <b-button
         size="is-small"
         type="is-text"
         @click="zoomOut"
         :disabled="!canZoomOut"
         icon-left="minus"
-        >Zoom Out</b-button
-      >
+      >Zoom Out</b-button>
       <b-button
         size="is-small"
         type="is-text"
         @click="collapseAll"
         icon-left="chevron-up"
-        >Collapse All</b-button
-      >
+      >Collapse All</b-button>
       <b-button
         size="is-small"
         type="is-text"
         @click="expandAll"
         icon-left="chevron-down"
-        >Expand All</b-button
-      >
+      >Expand All</b-button>
+      <b-button size="is-small" type="is-text" @click="reload" icon-left="refresh">Reload</b-button>
       <b-button
         size="is-small"
-        type="is-text"
-        @click="reload"
-        icon-left="refresh"
-        >Reload</b-button
-      >
+        type="is-primary"
+        @click="previewChanges"
+        icon-left="check"
+        :disabled="Object.keys(pendingTaskChanges).length === 0"
+      >Preview & Save</b-button>
     </div>
   </div>
 </template>
@@ -78,6 +81,7 @@ import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_marker.js';
 import moment from 'moment';
 import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
+import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
 
 const QUERY_FRAG_RATELIMIT = `
 rateLimit {
@@ -88,6 +92,7 @@ rateLimit {
 }
 `;
 
+// Flag is used to locate values.
 const FLAG_PROJECT_ENABLE = 'EnableGantt'.toLowerCase();
 const FLAG_REGEX_ITEM_START = /GanttStart:\s*(\d\d\d\d-\d\d-\d\d)/i;
 const FLAG_REGEX_ITEM_DUE = /GanttDue:\s*(\d\d\d\d-\d\d-\d\d)/i;
@@ -95,9 +100,17 @@ const FLAG_REGEX_ITEM_DURATION = /GanttDuration:\s*([\d]+)d/i;
 const FLAG_REGEX_ITEM_PROGRESS = /GanttProgress:\s*([\d.]+)%/i;
 const FLAG_DATE_FORMAT = 'YYYY-MM-DD';
 
+// Template is used to build values when they are not exist after update.
+const TEMPLATE_ITEM_START = 'GanttStart: {}';
+const TEMPLATE_ITEM_DUE = 'GanttDue: {}';
+const TEMPLATE_ITEM_PROGRESS = 'GanttProgress: {}%';
+
 export default {
   name: 'GanttView',
   props: ['org', 'repo'],
+  components: {
+    GanttChangePreviewDialog,
+  },
   data() {
     return {
       canZoomIn: true,
@@ -105,10 +118,12 @@ export default {
       loadingAll: 0,
       loadingFinished: 0,
       columnWidth: 500,
+      pendingTaskChanges: {},
+      isPreviewChangeDialogVisible: false,
+      isPreviewChangeDialogUpdating: false,
     };
   },
   async mounted() {
-    // gantt.config.readonly = true;
     gantt.ext.zoom.init({
       levels: [
         {
@@ -279,13 +294,292 @@ export default {
     gantt.config.row_height = 30;
     gantt.config.fit_tasks = true;
     gantt.config.grid_width = this.columnWidth;
-    gantt.config.details_on_dblclick = false;
+    // gantt.config.details_on_dblclick = false;
+    gantt.config.lightbox.sections = [
+      { name: 'time', height: 72, map_to: 'auto', type: 'duration' },
+    ];
+    gantt.config.time_step = 24 * 60;
     gantt.ext.zoom.setLevel('months');
+
+    this.eventIdBeforeTaskChange = gantt.attachEvent(
+      'onBeforeTaskChanged',
+      this.handleBeforeTaskChange
+    );
+    this.eventIdAfterTaskUpdate = gantt.attachEvent(
+      'onAfterTaskUpdate',
+      this.handleAfterTaskUpdate
+    );
+    this.eventIdBeforeLightbox = gantt.attachEvent(
+      'onBeforeLightbox',
+      this.handleBeforeLightbox
+    );
+    this.eventIdLightboxSave = gantt.attachEvent(
+      'onLightboxSave',
+      this.handleLightboxSave
+    );
+    this.lastTask = null;
 
     gantt.init(this.$refs.gantt);
     this.reload();
   },
+  beforeDestroy() {
+    if (this.eventIdBeforeTaskChange) {
+      gantt.detachEvent(this.eventIdBeforeTaskChange);
+      this.eventIdBeforeTaskChange = null;
+    }
+    if (this.eventIdAfterTaskUpdate) {
+      gantt.detachEvent(this.eventIdAfterTaskUpdate);
+      this.eventIdAfterTaskUpdate = null;
+    }
+    if (this.eventIdBeforeLightbox) {
+      gantt.detachEvent(this.eventIdBeforeLightbox);
+      this.eventIdBeforeLightbox = null;
+    }
+    if (this.eventIdLightboxSave) {
+      gantt.detachEvent(this.eventIdLightboxSave);
+      this.eventIdLightboxSave = null;
+    }
+    this.lastTask = null;
+  },
   methods: {
+    setLastTask(task) {
+      this.lastTask = {
+        start_date: task.start_date.valueOf(),
+        end_date: task.end_date.valueOf(),
+        progress: task.progress,
+        id: task.id,
+      };
+    },
+    handleBeforeTaskChange(id, mode, task) {
+      let allowChange = this.checkTaskPrivilege(task);
+      if (allowChange) {
+        this.setLastTask(task);
+      } else {
+        this.lastTask = null;
+      }
+      return allowChange;
+    },
+    handleAfterTaskUpdate(id, task) {
+      if (!this.checkTaskPrivilege(task)) {
+        console.error('No privilege to update task', id);
+        return;
+      }
+      if (!this.lastTask) {
+        console.error('Failed to verify lastTask', id);
+        return;
+      }
+      if (this.lastTask.id !== id) {
+        console.error('Failed to verify lastTask ID', id);
+        return;
+      }
+      this.checkTaskChange(task, 'progress', v => v);
+      this.checkTaskChange(task, 'start_date', v => v.valueOf());
+      this.checkTaskChange(task, 'end_date', v => v.valueOf());
+      console.log(task);
+      this.lastTask = null;
+      return true;
+    },
+    handleBeforeLightbox(id) {
+      const task = gantt.getTask(id);
+      if (!this.checkTaskPrivilege(task)) {
+        return false;
+      }
+      return true;
+    },
+    handleLightboxSave(id, task) {
+      if (!this.checkTaskPrivilege(task)) {
+        return false;
+      }
+      this.setLastTask(task);
+      return true;
+    },
+    checkTaskChange(newTask, fieldName, newValueMapper) {
+      console.log('Checking change for %s of field %s', newTask.id, fieldName);
+      const newValue = newValueMapper(newTask[fieldName]);
+      const oldValue = this.lastTask[fieldName];
+      if (newValue === oldValue) {
+        return;
+      }
+      console.log('Field %s is changed', fieldName);
+      const id = newTask.id;
+      if (!this.pendingTaskChanges[id]) {
+        this.$set(this.pendingTaskChanges, id, {
+          id,
+          task: newTask,
+        });
+      }
+      const pendingChange = this.pendingTaskChanges[id];
+      if (!pendingChange[fieldName]) {
+        this.$set(pendingChange, fieldName, { from: oldValue });
+      }
+      this.$set(pendingChange[fieldName], 'to', newValue);
+    },
+    checkTaskPrivilege(task) {
+      if (task.readonly) {
+        return false;
+      }
+      if (task.type !== 'task') {
+        return false;
+      }
+      if (!task._src.viewerCanUpdate) {
+        return false;
+      }
+      if (!window.sessionInfo) {
+        return false;
+      }
+      if (task._src._ganttAssignee !== window.sessionInfo.githubUser.login) {
+        return false;
+      }
+      return true;
+    },
+    previewChanges() {
+      if (Object.keys(this.pendingTaskChanges).length === 0) {
+        return;
+      }
+      this.isPreviewChangeDialogVisible = true;
+    },
+    async handleApplyPendingChanges(changes) {
+      forEach(this.pendingTaskChanges, change => {
+        this.$set(change, 'status', 'skip');
+      });
+      changes.forEach(change => {
+        change.status = 'pending';
+      });
+      this.isPreviewChangeDialogUpdating = true;
+
+      // 1. Fetch the body of each changed issue
+      const issueIds = changes.map(t => t.id);
+      let issues = [];
+      try {
+        issues = await this.loadIssues(issueIds);
+      } catch (e) {
+        // No need to shortcut since no issues will be updated then.
+        console.error(e);
+      }
+
+      const issuesById = {};
+      issues.forEach(issue => (issuesById[issue.id] = issue));
+
+      // 2. Ignore changes that cannot be updated
+      changes.forEach(change => {
+        if (!issuesById[change.id]) {
+          change.status = 'fail';
+        }
+      });
+
+      // 3. Apply change one by one. Use for loops to support async / await.
+      for (let i = 0; i < changes.length; i++) {
+        let change = changes[i];
+        const issue = issuesById[change.id];
+        if (!issue) {
+          continue;
+        }
+        change.status = 'working';
+        try {
+          await this.applyIssueUpdate(issue, change);
+          change.status = 'success';
+        } catch (e) {
+          console.error(e);
+          change.status = 'fail';
+          if (
+            e.body &&
+            e.body.msg &&
+            e.body.msg.indexOf('OAuth App access restriction') > -1
+          ) {
+            this.$buefy.dialog.alert({
+              title: 'Update failed',
+              message:
+                'GanttViewer does not have permissions to write the repository in this organization. <a href="https://help.github.com/en/github/setting-up-and-managing-your-github-user-account/requesting-organization-approval-for-oauth-apps" target="_blank">Click here for help</a>',
+              confirmText: 'OK',
+            });
+            this.isPreviewChangeDialogUpdating = false;
+            this.isPreviewChangeDialogVisible = false;
+            return;
+          }
+        }
+      }
+
+      // 4. All changes are applied
+      setTimeout(() => {
+        this.pendingTaskChanges = {};
+        this.isPreviewChangeDialogUpdating = false;
+        this.isPreviewChangeDialogVisible = false;
+        this.reload();
+      }, 500);
+    },
+    updateIssueBodyForField(body, flagMatcher, template, newValue) {
+      const m = body.match(flagMatcher);
+      const newValueFull = template.replace('{}', newValue);
+      if (m) {
+        return body.replace(m[0], newValueFull);
+      } else {
+        return body + `\n<!-- ${newValueFull} -->`;
+      }
+    },
+    async applyIssueUpdate(issue, change) {
+      let body = issue.body;
+      if (change.progress) {
+        body = this.updateIssueBodyForField(
+          body,
+          FLAG_REGEX_ITEM_PROGRESS,
+          TEMPLATE_ITEM_PROGRESS,
+          Math.floor(change.progress.to * 100)
+        );
+      }
+      if (change.start_date || change.end_date) {
+        // As long as start_date or end_date is changed, we need to update both
+        // because the task date may be generated from duration.
+        body = this.updateIssueBodyForField(
+          body,
+          FLAG_REGEX_ITEM_START,
+          TEMPLATE_ITEM_START,
+          moment(change.task.start_date.valueOf()).format(FLAG_DATE_FORMAT)
+        );
+        body = this.updateIssueBodyForField(
+          body,
+          FLAG_REGEX_ITEM_DUE,
+          TEMPLATE_ITEM_DUE,
+          moment(change.task.end_date.valueOf()).format(FLAG_DATE_FORMAT)
+        );
+        // We also need to remove the duration directive.
+        const m = body.match(FLAG_REGEX_ITEM_DURATION);
+        if (m) {
+          body = body.replace(m[0], '');
+        }
+      }
+
+      let mutationFrag;
+      if (change.task._src.__typename === 'Issue') {
+        mutationFrag = `
+          updateIssue(input: {id: $id, body: $body}) {
+            issue {
+              body
+            }
+          }
+        `;
+      } else {
+        mutationFrag = `
+          updatePullRequest(input: {pullRequestId: $id, body: $body}) {
+            pullRequest {
+              body
+            }
+          }
+        `;
+      }
+
+      await this.$octoClient.request(
+        `
+        mutation update($id: ID!, $body: String!) {
+          __typename
+          ${mutationFrag}
+        }
+      `,
+        {
+          id: issue.id,
+          body,
+        }
+      );
+    },
     updateColumnWidth(width) {
       this.columnWidth = width;
       gantt.config.grid_width = width;
@@ -319,6 +613,7 @@ export default {
       gantt.render();
     },
     async reload() {
+      this.pendingTaskChanges = {};
       try {
         await this.loadData();
       } catch (e) {
@@ -370,11 +665,6 @@ export default {
             .endOf('day')
             .toDate();
         }
-        m = item.body.match(FLAG_REGEX_ITEM_DUE);
-        if (m) {
-          // Override by due directive
-          item._ganttDue = moment(m[1], FLAG_DATE_FORMAT).toDate();
-        }
         m = item.body.match(FLAG_REGEX_ITEM_DURATION);
         if (m) {
           // Override by duration directive
@@ -385,6 +675,17 @@ export default {
               .toDate();
           }
         }
+        m = item.body.match(FLAG_REGEX_ITEM_DUE);
+        if (m) {
+          // Override by due directive
+          item._ganttDue = moment(m[1], FLAG_DATE_FORMAT).toDate();
+        }
+        if (!item._ganttDue) {
+          item._ganttDue = new Date(
+            item._ganttStart.valueOf() + 24 * 60 * 60 * 1000
+          );
+        }
+
         item._ganttProgress = 0;
         if (item.closed) {
           // Closed items always have progress = 1.
@@ -455,6 +756,44 @@ export default {
         });
       });
     },
+    async loadIssues(issueIdArray) {
+      // This function is used to re-fetch body before update, to avoid overriding contents.
+      const r = [];
+      const queryFrag = `
+        id
+        body
+        viewerCanUpdate
+      `;
+      const resp = await this.$octoClient.request(
+        `
+        query loadIssues($ids: [ID!]!){
+          issues: nodes(ids: $ids) {
+            __typename
+            ... on Issue {
+              ${queryFrag}
+            }
+            ... on PullRequest {
+              ${queryFrag}
+            }
+          }
+          ${QUERY_FRAG_RATELIMIT}
+        }
+      `,
+        {
+          ids: issueIdArray,
+        }
+      );
+      if (!resp || !resp.issues) {
+        throw new Error('Invalid loadIssues response');
+      }
+      console.log('loadIssues rateLimit', resp.rateLimit);
+      resp.issues.forEach(issue => {
+        if (issue.viewerCanUpdate) {
+          r.push(issue);
+        }
+      });
+      return r;
+    },
     async loadEnabledProjects() {
       // Request project only, to avoid easily exceeding GitHub's estimate cost.
       const r = [];
@@ -507,7 +846,7 @@ export default {
     async loadProjectItems(projectIdArray) {
       // Currently only first 100 card in each column is supported..
       const r = [];
-      const queryFlagItem = `
+      const queryFragItem = `
         id
         assignees(first: 1) {
           nodes {
@@ -547,10 +886,10 @@ export default {
                       content {
                         __typename
                         ... on PullRequest {
-                          ${queryFlagItem}
+                          ${queryFragItem}
                         }
                         ... on Issue {
-                          ${queryFlagItem}
+                          ${queryFragItem}
                         }
                       }
                     }

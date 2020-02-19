@@ -9,6 +9,7 @@
           @click="signin"
           :loading="isLoading"
           icon-left="github-circle"
+          rounded
         >
           Sign in use GitHub Account
         </b-button>

@@ -39,10 +39,14 @@ export default {
     };
   },
   async mounted() {
+    // FIXME: This is ugly. Use vuex.
+    window.sessionInfo = null;
     try {
       const resp = await this.$http.get('/github/info');
       if (resp.data && resp.data.accessToken) {
         this.sessionInfo = resp.data;
+        // FIXME: This is ugly. Use vuex.
+        window.sessionInfo = this.sessionInfo;
       }
     } catch (e) {
       if (e.status !== 403) {

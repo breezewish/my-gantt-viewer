@@ -120,6 +120,7 @@ module.exports = app => {
         logger.error(err);
         res.status(500).json({
           err: 'InternalError',
+          msg: err.message,
         });
       }
     );
@@ -136,7 +137,13 @@ module.exports = app => {
     const client = NewOctoClient(req.session.accessToken);
     client(req.body.query, req.body.parameters).then(
       resp => res.json(resp),
-      err => res.status(err.status).end()
+      err => {
+        logger.error(err);
+        res.status(500).json({
+          err: 'InternalError',
+          msg: err.message,
+        });
+      }
     );
   });
 
