@@ -427,9 +427,13 @@ export default {
       if (!window.sessionInfo) {
         return false;
       }
-      if (task._src._ganttAssignee !== window.sessionInfo.githubUser.login) {
-        return false;
-      }
+      // const currentLogin = window.sessionInfo.githubUser.login;
+      // if (
+      //   currentLogin !== task._src._ganttAssignee &&
+      //   currentLogin !== task._src.author.login
+      // ) {
+      //   return false;
+      // }
       return true;
     },
     previewChanges() {
@@ -852,6 +856,9 @@ export default {
           nodes {
             login
           }
+        }
+        author {
+          login
         }
         body
         createdAt
