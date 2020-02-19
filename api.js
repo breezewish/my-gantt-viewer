@@ -127,10 +127,27 @@ module.exports = app => {
   });
 
   app.get('/github/info', requireToken, (req, res) => {
-    res.json({
-      accessToken: req.session.accessToken,
-      githubUser: req.session.githubUser,
-    });
+    // Always verify the access token.
+    const client = NewOctoClient(req.session.accessToken);
+    client(`{
+      viewer {
+        login
+      }
+    }`).then(
+      _resp => {
+        res.json({
+          accessToken: req.session.accessToken,
+          githubUser: req.session.githubUser,
+        });
+      },
+      _err => {
+        req.session = null;
+        res.status(403).json({
+          err: 'SignInRequired',
+        });
+        return;
+      }
+    );
   });
 
   app.post('/github/graphql', requireToken, (req, res) => {
@@ -139,6 +156,13 @@ module.exports = app => {
       resp => res.json(resp),
       err => {
         logger.error(err);
+        if (err.message && err.message.indexOf('Bad credentials') > -1) {
+          req.session = null;
+          res.status(403).json({
+            err: 'SignInRequired',
+          });
+          return;
+        }
         res.status(500).json({
           err: 'InternalError',
           msg: err.message,
