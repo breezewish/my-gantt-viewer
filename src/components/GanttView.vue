@@ -706,8 +706,13 @@ export default {
         }
 
         item._ganttAssignee = null;
-        if (item.assignees.nodes.length > 0) {
-          item._ganttAssignee = item.assignees.nodes[0].login;
+        if (item.__typename === 'Issue') {
+          if (item.assignees.nodes.length > 0) {
+            item._ganttAssignee = item.assignees.nodes[0].login;
+          }
+        } else {
+          // For PullRequests, show author as assignee.
+          item._ganttAssignee = item.author.login;
         }
 
         if (item.milestone) {
