@@ -294,7 +294,7 @@ export default {
     gantt.config.row_height = 30;
     gantt.config.fit_tasks = true;
     gantt.config.grid_width = this.columnWidth;
-    // gantt.config.details_on_dblclick = false;
+    gantt.config.details_on_dblclick = false;
     gantt.config.lightbox.sections = [
       { name: 'time', height: 72, map_to: 'auto', type: 'duration' },
     ];
