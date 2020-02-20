@@ -1,3 +1,4 @@
+const webpack = require('webpack');
 const serveApi = require('./api');
 
 module.exports = {
@@ -5,5 +6,18 @@ module.exports = {
   devServer: {
     before: serveApi,
     port: 5000,
+  },
+  pluginOptions: {
+    webpackBundleAnalyzer: {
+      openAnalyzer: false,
+    },
+  },
+  configureWebpack: {
+    plugins: [
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^\.\/locale$/,
+        contextRegExp: /moment$/,
+      }),
+    ],
   },
 };

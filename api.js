@@ -1,5 +1,4 @@
 const qs = require('querystring');
-const compression = require('compression');
 const randomString = require('randomstring');
 const bodyParser = require('body-parser');
 const axios = require('axios');
@@ -63,8 +62,6 @@ function requireToken(req, res, next) {
 }
 
 module.exports = app => {
-  app.use(compression());
-
   app.use(bodyParser.urlencoded({ extended: false }));
 
   app.use(bodyParser.json());
