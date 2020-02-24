@@ -85,7 +85,7 @@ module.exports = app => {
           '/github/callback?' +
           qs.stringify({ redirect: req.query.redirect }),
         state: req.session.oAuthState,
-        scope: 'read:user user:email public_repo',
+        scope: 'read:user user:email repo',
       });
     res.redirect(githubAuthUrl);
   });
