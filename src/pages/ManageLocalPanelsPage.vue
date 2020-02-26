@@ -235,7 +235,7 @@ export default {
       {
         // Example: https://github.com/orgs/pingcap/projects/8
         const m = inputValue.match(
-          /github\.com\/orgs\/([\w\d\.\-\_]+)\/projects\/(\d+)/
+          /github\.com\/orgs\/([-\w\d\.\_]+)\/projects\/(\d+)/
         );
         if (m) {
           Vue.set(this.addProjectStates, panelId, {
@@ -249,7 +249,7 @@ export default {
       {
         // Example: https://github.com/tikv/tikv/projects/26
         const m = inputValue.match(
-          /github\.com\/([\w\d\.\-\_]+)\/([\w\d\.\-\_]+)\/projects\/(\d+)/
+          /github\.com\/([-\w\d\.\_]+)\/([-\w\d\.\_]+)\/projects\/(\d+)/
         );
         if (m) {
           Vue.set(this.addProjectStates, panelId, {
