@@ -1022,7 +1022,7 @@ export default {
       border: 1px solid rgb(247, 200, 20);
     }
     .gantt_task_progress {
-      background-color: rgba(247, 200, 20, 0.9);
+      background-color: rgb(247, 180, 17);
     }
   }
 
