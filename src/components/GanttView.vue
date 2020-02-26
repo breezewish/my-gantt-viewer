@@ -39,7 +39,7 @@
           :value="columnWidth"
           style="width: 100px; margin: 10px 0"
           :min="100"
-          :max="700"
+          :max="750"
           @change="updateColumnWidth"
         />
       </div>
@@ -238,12 +238,13 @@ export default {
         name: 'text',
         label: 'Name',
         tree: true,
-        width: '*',
         template: task => {
           return html`
             <a href="${task._src.url}" target="_blank">${task.text}</a>
           `;
         },
+        width: '*',
+        min_width: 400,
       },
       {
         name: 'assignee',
@@ -263,8 +264,23 @@ export default {
             `;
           }
         },
-        width: 100,
+        min_width: 100,
         max_width: 200,
+      },
+      {
+        name: 'repo',
+        label: 'Repository',
+        template: task => {
+          console.log(task._src);
+          if (task._src.repository) {
+            return html`
+              <small>${task._src.repository.nameWithOwner}</small>
+            `;
+          } else {
+            return html``;
+          }
+        },
+        min_width: 250,
       },
     ];
     gantt.templates.task_class = function(start, end, task) {
@@ -315,12 +331,41 @@ export default {
     gantt.config.task_height = 18;
     gantt.config.row_height = 30;
     gantt.config.fit_tasks = true;
-    gantt.config.grid_width = this.columnWidth;
+    // gantt.config.grid_width = this.columnWidth;
     gantt.config.details_on_dblclick = false;
     gantt.config.lightbox.sections = [
       { name: 'time', height: 72, map_to: 'auto', type: 'duration' },
     ];
     gantt.config.time_step = 24 * 60;
+    gantt.config.layout = {
+      cols: [
+        {
+          width: this.columnWidth,
+          min_width: 200,
+          rows: [
+            {
+              view: 'grid',
+              scrollX: 'gridScroll',
+              scrollable: true,
+              scrollY: 'scrollVer',
+            },
+
+            // horizontal scrollbar for the grid
+            { view: 'scrollbar', id: 'gridScroll', group: 'horizontal' },
+          ],
+        },
+        { resizer: true, width: 1 },
+        {
+          rows: [
+            { view: 'timeline', scrollX: 'scrollHor', scrollY: 'scrollVer' },
+
+            // horizontal scrollbar for the timeline
+            { view: 'scrollbar', id: 'scrollHor', group: 'horizontal' },
+          ],
+        },
+        { view: 'scrollbar', id: 'scrollVer' },
+      ],
+    };
     gantt.ext.zoom.setLevel('months');
 
     this.eventIdBeforeTaskChange = gantt.attachEvent(
@@ -609,8 +654,8 @@ export default {
     },
     updateColumnWidth(width) {
       this.columnWidth = width;
-      gantt.config.grid_width = width;
-      gantt.render();
+      gantt.config.layout.cols[0].width = width;
+      gantt._reinit(this.$refs.gantt);
     },
     updateCanZoomInOut() {
       var level = gantt.ext.zoom.getCurrentLevel();
@@ -660,7 +705,6 @@ export default {
       this.loadingAll = 2;
 
       let projects = [];
-
       if (this.$props.localPanelId) {
         const panel = this.panels[this.$props.localPanelId];
         if (!panel) {
@@ -866,6 +910,9 @@ export default {
         viewerCanUpdate
         title
         state
+        repository {
+          nameWithOwner
+        }
         milestone {
           dueOn
           id
