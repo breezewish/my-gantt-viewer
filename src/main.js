@@ -7,9 +7,9 @@ import vueHeadful from 'vue-headful';
 import store from '@/store';
 import { OctoClientPlugin } from '@/plugins/octoclient';
 import App from '@/App.vue';
-import IndexPage from '@/pages/Index.vue';
-import ViewPage from '@/pages/View.vue';
-import ManageLocalPanelsPage from '@/pages/ManageLocalPanels.vue';
+import IndexPage from '@/pages/IndexPage.vue';
+import ViewPage from '@/pages/ViewPage.vue';
+import ManageLocalPanelsPage from '@/pages/ManageLocalPanelsPage.vue';
 import ViewLocalPanelPage from '@/pages/ViewLocalPanelPage.vue';
 
 Vue.use(Buefy);

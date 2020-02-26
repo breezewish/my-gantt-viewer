@@ -846,6 +846,7 @@ export default {
     async loadProjectItems(projectIdArray) {
       // Currently only first 100 card in each column is supported..
       const r = [];
+      const itemIds = {};
       const queryFragItem = `
         id
         assignees(first: 1) {
@@ -918,6 +919,14 @@ export default {
             if (!card.content) {
               return;
             }
+            if (!card.content.id) {
+              return;
+            }
+            // Deduplicate
+            if (itemIds[card.content.id]) {
+              return;
+            }
+            itemIds[card.content.id] = true;
             r.push({
               ...card.content,
               projectId: proj.id,
