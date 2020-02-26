@@ -1017,12 +1017,12 @@ export default {
   }
 
   &.kind-task-on-schedule {
-    background-color: rgba(247, 206, 48, 0.9);
+    background-color: rgba(247, 195, 0, 0.65);
     &.gantt_selected {
       border: 1px solid rgb(247, 200, 20);
     }
     .gantt_task_progress {
-      background-color: rgba(247, 206, 48, 0.9);
+      background-color: rgba(247, 200, 20, 0.9);
     }
   }
 
@@ -1032,7 +1032,7 @@ export default {
       border: 1px solid $red;
     }
     .gantt_task_progress {
-      background-color: $red;
+      background-color: rgba($red, 0.6);
     }
   }
 }
