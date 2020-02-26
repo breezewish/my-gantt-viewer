@@ -10,10 +10,14 @@ const app = express();
 
 app.use(compression());
 
-app.use(express.static(path.join(__dirname, 'dist')));
-app.get('/view/*', (req, res) => {
+function serveIndex(req, res) {
   res.sendFile(path.join(__dirname, '/dist/index.html'));
-});
+}
+
+app.use(express.static(path.join(__dirname, 'dist')));
+app.get('/view/*', serveIndex);
+app.get('/local_panel', serveIndex);
+app.get('/local_panel/*', serveIndex);
 
 serveApi(app);
 
