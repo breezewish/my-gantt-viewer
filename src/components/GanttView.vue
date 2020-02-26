@@ -794,8 +794,8 @@ export default {
             if (item._ganttProgress === 1) {
               return 'beyond-complete';
             }
-            const now = Date.now();
 
+            const now = Date.now();
             if (Date.now() > item._ganttDue) {
               return 'out-schedule';
             }
@@ -1019,7 +1019,7 @@ export default {
   &.kind-task-on-schedule {
     background-color: rgba(247, 206, 48, 0.9);
     &.gantt_selected {
-      border: 1px solid rgba(247, 206, 48, 0.9);
+      border: 1px solid rgb(247, 200, 20);
     }
     .gantt_task_progress {
       background-color: rgba(247, 206, 48, 0.9);
