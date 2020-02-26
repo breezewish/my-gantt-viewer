@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div style="height: 100%; display: grid; grid-template-rows: 180px auto;">
     <vue-headful title="Manage Local Panels - GanttViewer" />
     <section class="hero is-primary">
       <div class="hero-body">
@@ -36,9 +36,9 @@
         </div>
       </div>
     </section>
-    <section class="section">
+    <section class="section" style="overflow-y: scroll;">
       <div class="container">
-        <b-collapse class="card" v-for="panel of panels" :key="panel.id">
+        <b-collapse class="card" v-for="panel of panels" :key="panel.id" style="margin: 10px 0;">
           <div slot="trigger" slot-scope="props" class="card-header">
             <p class="card-header-title">Panel: {{ panel.name }}</p>
             <a class="card-header-icon">

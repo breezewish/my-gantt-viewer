@@ -103,8 +103,8 @@ import forEach from 'lodash/forEach';
 import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
 
 // Flag is used to locate values.
-const FLAG_REGEX_ITEM_START = /GanttStart:\s*(\d\d\d\d-\d\d-\d\d)/i;
-const FLAG_REGEX_ITEM_DUE = /GanttDue:\s*(\d\d\d\d-\d\d-\d\d)/i;
+const FLAG_REGEX_ITEM_START = /GanttStart:\s*(\d{4}-\d{2}-\d{2})/i;
+const FLAG_REGEX_ITEM_DUE = /GanttDue:\s*(\d{4}-\d{2}-\d{2})/i;
 const FLAG_REGEX_ITEM_DURATION = /GanttDuration:\s*([\d]+)d/i;
 const FLAG_REGEX_ITEM_PROGRESS = /GanttProgress:\s*([\d.]+)%/i;
 const FLAG_DATE_FORMAT = 'YYYY-MM-DD';
@@ -289,6 +289,14 @@ export default {
           return 'kind-project';
           break;
         case 'task':
+          switch (task.schedule) {
+            case 'beyond-schedule':
+              return 'kind-task-beyond-schedule'
+            case 'on-schedule':
+              return 'kind-task-on-schedule'
+            case 'out-schedule':
+              return 'kind-task-out-schedule'
+          }
           return 'kind-task';
           break;
       }
@@ -810,12 +818,14 @@ export default {
 
       const data = [];
       projects.forEach(proj => {
+        const projectProgresses = items.filter(item => item.projectId == proj.id);
         data.push({
           id: proj.id,
           text: proj.name,
           type: 'project',
           open: true,
           readonly: true,
+          progress: projectProgresses.reduce((a, b) => {return a + b._ganttProgress}, 0) / projectProgresses.length,
           _src: proj,
         });
       });
@@ -824,6 +834,25 @@ export default {
           id: item.id,
           text: `#${item.number} ${item.title}`,
           type: 'task',
+          schedule: function () {
+            if (item._ganttProgress === 1) {
+              return 'beyond-complete';
+            }
+
+            const now = Date.now();
+            if (Date.now() > item._ganttDue) {
+              return 'out-schedule';
+            }
+
+            const allDuration = item._ganttDue - item._ganttStart;
+            const lastDuration = Date.now() - item._ganttStart;
+            const expectedProgress = lastDuration / allDuration;
+
+            if (item._ganttProgress > expectedProgress) {
+              return 'beyond-schedule';
+            }
+            return 'on-schedule';
+          }(),
           start_date: item._ganttStart,
           end_date: item._ganttDue,
           progress: item._ganttProgress,
@@ -1024,13 +1053,33 @@ export default {
     }
   }
 
-  &.kind-task {
-    background-color: rgba($blue, 0.3);
+  &.kind-task-beyond-schedule {
+    background-color: rgba($green, 0.6);
     &.gantt_selected {
-      border: 1px solid $blue;
+      border: 1px solid $green;
     }
     .gantt_task_progress {
-      background-color: $blue;
+      background-color: $green;
+    }
+  }
+
+  &.kind-task-on-schedule {
+    background-color: rgba(247, 195, 0, 0.65);
+    &.gantt_selected {
+      border: 1px solid rgb(247, 200, 20);
+    }
+    .gantt_task_progress {
+      background-color: rgb(247, 180, 17);
+    }
+  }
+
+  &.kind-task-out-schedule {
+    background-color: rgba($red, 0.45);
+    &.gantt_selected {
+      border: 1px solid $red;
+    }
+    .gantt_task_progress {
+      background-color: rgba($red, 0.6);
     }
   }
 }
