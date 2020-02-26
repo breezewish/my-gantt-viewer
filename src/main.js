@@ -2,15 +2,22 @@ import Vue from 'vue';
 import Buefy from 'buefy';
 import VueRouter from 'vue-router';
 import VueResource from 'vue-resource';
-import OctoClient from '@/plugins/octoclient';
+import VueClipboard from 'vue-clipboard2';
+import vueHeadful from 'vue-headful';
+import store from '@/store';
+import { OctoClientPlugin } from '@/plugins/octoclient';
 import App from '@/App.vue';
-import IndexPage from '@/pages/index.vue';
-import ViewPage from '@/pages/view.vue';
+import IndexPage from '@/pages/Index.vue';
+import ViewPage from '@/pages/View.vue';
+import ManageLocalPanelsPage from '@/pages/ManageLocalPanels.vue';
+import ViewLocalPanelPage from '@/pages/ViewLocalPanelPage.vue';
 
 Vue.use(Buefy);
 Vue.use(VueRouter);
 Vue.use(VueResource);
-Vue.use(OctoClient);
+Vue.use(OctoClientPlugin);
+Vue.use(VueClipboard);
+Vue.component('vue-headful', vueHeadful);
 
 Vue.config.productionTip = false;
 
@@ -27,7 +34,17 @@ const router = new VueRouter({
       path: '/view/:org/:repo',
       component: ViewPage,
     },
+    {
+      name: 'manage_local_panels',
+      path: '/local_panel',
+      component: ManageLocalPanelsPage,
+    },
+    {
+      name: 'view_local_panel',
+      path: '/local_panel/:id',
+      component: ViewLocalPanelPage,
+    },
   ],
 });
 
-new Vue({ router, render: h => h(App) }).$mount('#app');
+new Vue({ router, store, render: h => h(App) }).$mount('#app');

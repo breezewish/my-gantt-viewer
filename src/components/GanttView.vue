@@ -1,6 +1,7 @@
 <template>
   <div style="width: 100%; height: 100%; position: relative;">
-    <b-modal :active="loadingAll > 0" :can-cancel="false">
+    <vue-headful :title="`${title} - GanttViewer`" />
+    <b-modal animation="zoom-in" :active="loadingAll > 0" :can-cancel="false">
       <div style="text-align: center; width: 300px; margin: 0 auto;">
         <p style="margin-bottom: 10px;">Loading data from GitHub...</p>
         <b-progress
@@ -12,6 +13,7 @@
       </div>
     </b-modal>
     <b-modal
+      animation="zoom-in"
       :active.sync="isPreviewChangeDialogVisible"
       has-modal-card
       trap-focus
@@ -23,8 +25,13 @@
         :updating="isPreviewChangeDialogUpdating"
       />
     </b-modal>
-    <div ref="gantt" style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"></div>
-    <div style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;">
+    <div
+      ref="gantt"
+      style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"
+    ></div>
+    <div
+      style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;"
+    >
       <div style="display: inline-block; margin: 0 10px;">
         <b-slider
           :tooltip="false"
@@ -42,39 +49,51 @@
         @click="zoomIn"
         :disabled="!canZoomIn"
         icon-left="plus"
-      >Zoom In</b-button>
+        >Zoom In</b-button
+      >
       <b-button
         size="is-small"
         type="is-text"
         @click="zoomOut"
         :disabled="!canZoomOut"
         icon-left="minus"
-      >Zoom Out</b-button>
+        >Zoom Out</b-button
+      >
       <b-button
         size="is-small"
         type="is-text"
         @click="collapseAll"
         icon-left="chevron-up"
-      >Collapse All</b-button>
+        >Collapse All</b-button
+      >
       <b-button
         size="is-small"
         type="is-text"
         @click="expandAll"
         icon-left="chevron-down"
-      >Expand All</b-button>
-      <b-button size="is-small" type="is-text" @click="reload" icon-left="refresh">Reload</b-button>
+        >Expand All</b-button
+      >
+      <b-button
+        size="is-small"
+        type="is-text"
+        @click="reload"
+        icon-left="refresh"
+        >Reload</b-button
+      >
       <b-button
         size="is-small"
         type="is-primary"
         @click="previewChanges"
         icon-left="check"
         :disabled="Object.keys(pendingTaskChanges).length === 0"
-      >Preview & Save</b-button>
+        >Preview & Save</b-button
+      >
     </div>
   </div>
 </template>
 
 <script>
+import { mapState } from 'vuex';
 import { gantt } from 'dhtmlx-gantt';
 import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_tooltip.js';
 import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_marker.js';
@@ -83,17 +102,7 @@ import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
 import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
 
-const QUERY_FRAG_RATELIMIT = `
-rateLimit {
-  limit
-  cost
-  remaining
-  resetAt
-}
-`;
-
 // Flag is used to locate values.
-const FLAG_PROJECT_ENABLE = 'EnableGantt'.toLowerCase();
 const FLAG_REGEX_ITEM_START = /GanttStart:\s*(\d\d\d\d-\d\d-\d\d)/i;
 const FLAG_REGEX_ITEM_DUE = /GanttDue:\s*(\d\d\d\d-\d\d-\d\d)/i;
 const FLAG_REGEX_ITEM_DURATION = /GanttDuration:\s*([\d]+)d/i;
@@ -107,7 +116,20 @@ const TEMPLATE_ITEM_PROGRESS = 'GanttProgress: {}%';
 
 export default {
   name: 'GanttView',
-  props: ['org', 'repo'],
+  props: ['org', 'repo', 'localPanelId'],
+  computed: {
+    ...mapState('localPanel', ['panels']),
+    title() {
+      if (!this.$props.localPanelId) {
+        return `${this.$props.org}/${this.$props.repo}`;
+      }
+      const panel = this.panels[this.$props.localPanelId];
+      if (!panel) {
+        return this.$props.localPanelId;
+      }
+      return `Local Panel ${panel.name}`;
+    },
+  },
   components: {
     GanttChangePreviewDialog,
   },
@@ -491,6 +513,7 @@ export default {
             e.body.msg.indexOf('OAuth App access restriction') > -1
           ) {
             this.$buefy.dialog.alert({
+              animation: 'zoom-in',
               title: 'Update failed',
               message:
                 'GanttViewer does not have permissions to write the repository in this organization. <a href="https://help.github.com/en/github/setting-up-and-managing-your-github-user-account/requesting-organization-approval-for-oauth-apps" target="_blank">Click here for help</a>',
@@ -635,7 +658,24 @@ export default {
     },
     async loadData() {
       this.loadingAll = 2;
-      const projects = await this.loadEnabledProjects();
+
+      let projects = [];
+
+      if (this.$props.localPanelId) {
+        const panel = this.panels[this.$props.localPanelId];
+        if (!panel) {
+          this.$buefy.dialog.alert(
+            `Local panel ${this.$props.localPanelId} does not exist.`
+          );
+          return;
+        }
+        projects = Object.freeze(Object.values(panel.projects));
+      } else {
+        projects = await this.$octoClient.loadEnabledProjectsFromRepo(
+          this.$props.org,
+          this.$props.repo
+        );
+      }
       // window.projects = JSON.stringify(projects, null, 4);
       // const projects = require('./mock_projects.json');
       this.loadingFinished += 1;
@@ -785,7 +825,7 @@ export default {
               ${queryFrag}
             }
           }
-          ${QUERY_FRAG_RATELIMIT}
+          ${this.$octoClient.QUERY_FRAG_RATELIMIT}
         }
       `,
         {
@@ -801,55 +841,6 @@ export default {
           r.push(issue);
         }
       });
-      return r;
-    },
-    async loadEnabledProjects() {
-      // Request project only, to avoid easily exceeding GitHub's estimate cost.
-      const r = [];
-      let after = null;
-      for (;;) {
-        const resp = await this.$octoClient.request(
-          `
-          query loadEnabledProjects($org: String!, $repo: String!, $after: String) {
-            repository(name: $repo, owner: $org) {
-              projects(first: 100, after: $after) {
-                pageInfo {
-                  hasNextPage
-                  endCursor
-                }
-                nodes {
-                  body
-                  id
-                  name
-                  number
-                  state
-                  url
-                }
-              }
-            }
-            ${QUERY_FRAG_RATELIMIT}
-          }
-        `,
-          {
-            org: this.$props.org,
-            repo: this.$props.repo,
-            after,
-          }
-        );
-        if (!resp || !resp.repository) {
-          throw new Error('Invalid loadEnabledProjects response');
-        }
-        console.log('loadEnabledProjects rateLimit', resp.rateLimit);
-        resp.repository.projects.nodes.forEach(n => {
-          if (n.body.toLowerCase().indexOf(FLAG_PROJECT_ENABLE) > -1) {
-            r.push(n);
-          }
-        });
-        if (!resp.repository.projects.pageInfo.hasNextPage) {
-          break;
-        }
-        after = resp.repository.projects.pageInfo.endCursor;
-      }
       return r;
     },
     async loadProjectItems(projectIdArray) {
@@ -910,7 +901,7 @@ export default {
               }
             }
           }
-          ${QUERY_FRAG_RATELIMIT}
+          ${this.$octoClient.QUERY_FRAG_RATELIMIT}
         }
       `,
         {

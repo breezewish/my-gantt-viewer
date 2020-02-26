@@ -2,6 +2,7 @@
   <div style="height: 100%; width: 100%; position: relative; overflow: hidden;">
     <b-loading :is-full-page="true" :active="isLoading" :can-cancel="false" />
     <b-modal
+      animation="zoom-in"
       :active="!isLoading && !sessionInfo"
       has-modal-card
       trap-focus

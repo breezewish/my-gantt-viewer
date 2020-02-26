@@ -1,5 +1,7 @@
 <template>
-  <div></div>
+  <div>
+    <vue-headful title="GanttViewer" />
+  </div>
 </template>
 
 <script>
