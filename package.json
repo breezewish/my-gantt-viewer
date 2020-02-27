@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@octokit/graphql": "^4.3.1",
+    "ajv": "^6.12.0",
     "axios": "^0.19.2",
     "body-parser": "^1.19.0",
     "buefy": "^0.8.10",

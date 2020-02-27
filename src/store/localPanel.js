@@ -32,6 +32,10 @@ export default {
     deleteProject(state, { id, projectId }) {
       Vue.delete(state.panels[id].projects, projectId);
     },
+    importPanel(state, { panel }) {
+      const id = panel.id;
+      Vue.set(state.panels, id, panel);
+    },
   },
   actions: {},
   getters: {},
