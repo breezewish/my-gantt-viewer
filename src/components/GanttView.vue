@@ -233,6 +233,14 @@ export default {
     gantt.templates.grid_file = item => {
       return '';
     };
+    gantt.templates.task_text = () => {
+      return '';
+    };
+    gantt.templates.rightside_text = (start, end, task) => {
+      return html`
+        ${task.text}
+      `;
+    };
     gantt.config.columns = [
       {
         name: 'text',
@@ -338,8 +346,8 @@ export default {
       return template;
     };
     gantt.config.drag_links = false;
-    gantt.config.task_height = 18;
-    gantt.config.row_height = 30;
+    gantt.config.task_height = 10;
+    gantt.config.row_height = 35;
     gantt.config.fit_tasks = true;
     // gantt.config.grid_width = this.columnWidth;
     gantt.config.details_on_dblclick = false;
@@ -1042,61 +1050,66 @@ export default {
   }
 }
 
+.gantt_side_content.gantt_right {
+  overflow: visible;
+}
+
 .gantt_task_line {
   border: 1px solid transparent;
   border-radius: 0;
 
   &.gantt_selected {
     box-shadow: none;
+    border: 1px solid transparent;
   }
 
   &.kind-project {
-    background-color: #888;
+    background-color: rgba(#444, 0.3);
     .gantt_task_progress {
       background-color: #444;
     }
-    &.gantt_selected {
-      border: 1px solid #444;
-    }
+    // &.gantt_selected {
+    //   border: 1px solid #444;
+    // }
   }
 
   &.kind-task-beyond-complete {
-    background-color: rgba($blue, 0.4);
-    &.gantt_selected {
-      border: 1px solid $blue;
-    }
+    background-color: rgba($blue, 0.3);
+    // &.gantt_selected {
+    //   border: 1px solid $blue;
+    // }
     .gantt_task_progress {
       background-color: $blue;
     }
   }
 
   &.kind-task-beyond-schedule {
-    background-color: rgba($green, 0.4);
-    &.gantt_selected {
-      border: 1px solid $green;
-    }
+    background-color: rgba($green, 0.3);
+    // &.gantt_selected {
+    //   border: 1px solid $green;
+    // }
     .gantt_task_progress {
       background-color: $green;
     }
   }
 
   &.kind-task-on-schedule {
-    background-color: rgba(247, 195, 0, 0.45);
-    &.gantt_selected {
-      border: 1px solid rgb(247, 200, 20);
-    }
+    background-color: rgba(247, 195, 0, 0.3);
+    // &.gantt_selected {
+    //   border: 1px solid $orange;
+    // }
     .gantt_task_progress {
       background-color: rgb(247, 180, 17);
     }
   }
 
   &.kind-task-out-schedule {
-    background-color: rgba($red, 0.45);
-    &.gantt_selected {
-      border: 1px solid $red;
-    }
+    background-color: rgba($red, 0.3);
+    // &.gantt_selected {
+    //   border: 1px solid $red;
+    // }
     .gantt_task_progress {
-      background-color: rgba($red, 0.6);
+      background-color: rgba($red, 0.8);
     }
   }
 }
