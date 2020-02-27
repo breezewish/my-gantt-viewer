@@ -28,6 +28,7 @@
     <div
       ref="gantt"
       style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"
+      @mouseover="handleGanttMouseOver"
     ></div>
     <div
       style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;"
@@ -279,7 +280,6 @@ export default {
         name: 'repo',
         label: 'Repository',
         template: task => {
-          console.log(task._src);
           if (task._src.repository) {
             return html`
               <small>${task._src.repository.nameWithOwner}</small>
@@ -477,6 +477,13 @@ export default {
       }
       this.setLastTask(task);
       return true;
+    },
+    handleGanttMouseOver(ev) {
+      const taskRowDom = ev.target.closest('.gantt_task_row, .gantt_row');
+      if (!taskRowDom || !taskRowDom.getAttribute('task_id')) {
+        return;
+      }
+      gantt.selectTask(taskRowDom.getAttribute('task_id'));
     },
     checkTaskChange(newTask, fieldName, newValueMapper) {
       console.log('Checking change for %s of field %s', newTask.id, fieldName);
