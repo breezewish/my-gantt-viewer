@@ -290,12 +290,14 @@ export default {
           break;
         case 'task':
           switch (task.schedule) {
+            case 'beyond-complete':
+              return 'kind-task-beyond-complete';
             case 'beyond-schedule':
-              return 'kind-task-beyond-schedule'
+              return 'kind-task-beyond-schedule';
             case 'on-schedule':
-              return 'kind-task-on-schedule'
+              return 'kind-task-on-schedule';
             case 'out-schedule':
-              return 'kind-task-out-schedule'
+              return 'kind-task-out-schedule';
           }
           return 'kind-task';
           break;
@@ -818,14 +820,19 @@ export default {
 
       const data = [];
       projects.forEach(proj => {
-        const projectProgresses = items.filter(item => item.projectId == proj.id);
+        const projectProgresses = items.filter(
+          item => item.projectId == proj.id
+        );
         data.push({
           id: proj.id,
           text: proj.name,
           type: 'project',
           open: true,
           readonly: true,
-          progress: projectProgresses.reduce((a, b) => {return a + b._ganttProgress}, 0) / projectProgresses.length,
+          progress:
+            projectProgresses.reduce((a, b) => {
+              return a + b._ganttProgress;
+            }, 0) / projectProgresses.length,
           _src: proj,
         });
       });
@@ -834,7 +841,7 @@ export default {
           id: item.id,
           text: `#${item.number} ${item.title}`,
           type: 'task',
-          schedule: function () {
+          schedule: (function() {
             if (item._ganttProgress === 1) {
               return 'beyond-complete';
             }
@@ -852,7 +859,7 @@ export default {
               return 'beyond-schedule';
             }
             return 'on-schedule';
-          }(),
+          })(),
           start_date: item._ganttStart,
           end_date: item._ganttDue,
           progress: item._ganttProgress,
@@ -1053,8 +1060,18 @@ export default {
     }
   }
 
+  &.kind-task-beyond-complete {
+    background-color: rgba($blue, 0.4);
+    &.gantt_selected {
+      border: 1px solid $blue;
+    }
+    .gantt_task_progress {
+      background-color: $blue;
+    }
+  }
+
   &.kind-task-beyond-schedule {
-    background-color: rgba($green, 0.6);
+    background-color: rgba($green, 0.4);
     &.gantt_selected {
       border: 1px solid $green;
     }
@@ -1064,7 +1081,7 @@ export default {
   }
 
   &.kind-task-on-schedule {
-    background-color: rgba(247, 195, 0, 0.65);
+    background-color: rgba(247, 195, 0, 0.45);
     &.gantt_selected {
       border: 1px solid rgb(247, 200, 20);
     }
