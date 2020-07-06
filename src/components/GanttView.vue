@@ -101,6 +101,7 @@ import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_marker.js';
 import moment from 'moment';
 import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
+import Color from 'color';
 import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
 import * as utils from '@/utils.js';
 
@@ -314,34 +315,57 @@ export default {
     };
     gantt.templates.tooltip_text = function(start, end, task) {
       let template = html`
-        <div class="subtitle is-6" style="margin-bottom: 0.5rem">
+        <div class="row subtitle is-6" style="margin-bottom: 0.5rem">
           ${task.text}
         </div>
       `;
       template += html`
-        <div>
+        <div class="row">
           <b>Start date:</b> ${gantt.templates.tooltip_date_format(start)}
         </div>
       `;
       template += html`
-        <div><b>End date:</b> ${gantt.templates.tooltip_date_format(end)}</div>
+        <div class="row">
+          <b>End date:</b> ${gantt.templates.tooltip_date_format(end)}
+        </div>
       `;
       template += html`
-        <div><b>Progress:</b> ${Math.round(task.progress * 100)}%</div>
+        <div class="row">
+          <b>Progress:</b> ${Math.round(task.progress * 100)}%
+        </div>
       `;
+      if (task._src.column?.name) {
+        template += html`
+          <div class="row"><b>Column:</b> ${task._src.column?.name}</div>
+        `;
+      }
+      if (task._src.labels?.nodes?.length > 0) {
+        const l = task._src.labels.nodes.map(label => {
+          const isDarkBg = Color(`#${label.color}`).isDark();
+          const foreColor = isDarkBg ? '#fff' : '#000';
+          return html`
+            <span
+              class="gh-label"
+              style="background-color: #${label.color}; color: ${foreColor}"
+              >${label.name}</span
+            >
+          `;
+        });
+        template += '<div class="row"><b>Labels:</b> ' + l.join(' ') + '</div>';
+      }
       if (task._src._ganttAssignee) {
         template += html`
-          <div><b>Assignee:</b> @${task._src._ganttAssignee}</div>
+          <div class="row"><b>Assignee:</b> @${task._src._ganttAssignee}</div>
         `;
       }
       if (task._src.milestone) {
         template += html`
-          <div><b>Milestone:</b> ${task._src.milestone.title}</div>
+          <div class="row"><b>Milestone:</b> ${task._src.milestone.title}</div>
         `;
       }
       if (task._src.state) {
         template += html`
-          <div><b>State:</b> ${task._src.state}</div>
+          <div class="row"><b>State:</b> ${task._src.state}</div>
         `;
       }
       return template;
@@ -974,6 +998,12 @@ export default {
           state
           number
         }
+        labels(first: 10) {
+          nodes {
+            name
+            color
+          }
+        }
       `;
       const resp = await this.$octoClient.request(
         `
@@ -987,6 +1017,7 @@ export default {
                   name
                   cards(first: 100) {
                     nodes {
+                      isArchived
                       content {
                         __typename
                         ... on PullRequest {
@@ -1016,6 +1047,9 @@ export default {
       resp.projects.forEach(proj => {
         proj.columns.nodes.forEach(column => {
           column.cards.nodes.forEach(card => {
+            if (card.isArchived) {
+              return;
+            }
             if (!card.content) {
               return;
             }
@@ -1029,6 +1063,9 @@ export default {
             itemIds[card.content.id] = true;
             r.push({
               ...card.content,
+              column: {
+                name: column.name,
+              },
               projectId: proj.id,
             });
           });
@@ -1121,5 +1158,24 @@ export default {
       background-color: rgba($red, 0.8);
     }
   }
+}
+
+.gantt_container {
+  font-family: inherit;
+}
+
+.gantt_tooltip {
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.gantt_tooltip .row {
+  margin: 5px 0;
+}
+
+.gh-label {
+  border-radius: 2em;
+  padding: 2px 7px;
+  line-height: 1.2;
 }
 </style>
