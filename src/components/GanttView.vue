@@ -384,7 +384,7 @@ export default {
         { view: 'scrollbar', id: 'scrollVer' },
       ],
     };
-    gantt.ext.zoom.setLevel('months');
+    gantt.ext.zoom.setLevel('weeks');
 
     this.eventIdBeforeTaskChange = gantt.attachEvent(
       'onBeforeTaskChanged',
@@ -885,6 +885,7 @@ export default {
       });
 
       gantt.parse({ data, links: [] });
+      gantt.showDate(new Date());
 
       gantt.addMarker({
         start_date: new Date(),
