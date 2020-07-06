@@ -7,9 +7,15 @@ const { graphql } = require('@octokit/graphql');
 const logger = require('signale');
 
 function NewOctoClient(token) {
+  let destToken;
+  if (process.env.ACCESS_TOKEN_OVERRIDE) {
+    destToken = process.env.ACCESS_TOKEN_OVERRIDE;
+  } else {
+    destToken = token;
+  }
   const client = graphql.defaults({
     headers: {
-      authorization: `token ${token}`,
+      authorization: `token ${destToken}`,
     },
   });
   return client;
@@ -52,7 +58,7 @@ async function acquireOAuthToken(code, state) {
 }
 
 function requireToken(req, res, next) {
-  if (!req.session.accessToken) {
+  if (!process.env.ACCESS_TOKEN_OVERRIDE && !req.session.accessToken) {
     res.status(403).json({
       err: 'SignInRequired',
     });

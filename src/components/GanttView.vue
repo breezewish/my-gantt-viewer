@@ -894,7 +894,7 @@ export default {
 
       forEach(milestones, milestone => {
         gantt.addMarker({
-          start_date: moment(milestone.dueOn),
+          start_date: moment(milestone.dueOn).valueOf(),
           text: milestone.title,
           css: 'normal',
         });

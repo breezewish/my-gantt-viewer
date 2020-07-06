@@ -43,5 +43,5 @@ Online Gantt Graph based on GitHub Issues
 
    ```bash
    npm install
-   npm start
+   npm run ui:serve
    ```

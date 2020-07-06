@@ -2,7 +2,7 @@
   "name": "my-gantt-viewer",
   "version": "0.0.1",
   "engines": {
-    "node": "12.x"
+    "node": "14.x"
   },
   "main": "server.js",
   "scripts": {
