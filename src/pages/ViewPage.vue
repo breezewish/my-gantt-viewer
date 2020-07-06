@@ -1,9 +1,5 @@
 <template>
-  <GanttView
-    :key="`${$route.params.org}/${$route.params.repo}`"
-    :org="$route.params.org"
-    :repo="$route.params.repo"
-  />
+  <GanttView :key="$route.params.pathMatch" :path="$route.params.pathMatch" />
 </template>
 
 <script>

@@ -31,7 +31,7 @@ const router = new VueRouter({
     },
     {
       name: 'view',
-      path: '/view/:org/:repo',
+      path: '/view/*',
       component: ViewPage,
     },
     {

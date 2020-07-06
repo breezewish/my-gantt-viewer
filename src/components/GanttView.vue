@@ -102,6 +102,7 @@ import moment from 'moment';
 import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
 import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
+import * as utils from '@/utils.js';
 
 // Flag is used to locate values.
 const FLAG_REGEX_ITEM_START = /GanttStart:\s*(\d{4}-\d{2}-\d{2})/i;
@@ -117,12 +118,12 @@ const TEMPLATE_ITEM_PROGRESS = 'GanttProgress: {}%';
 
 export default {
   name: 'GanttView',
-  props: ['org', 'repo', 'localPanelId'],
+  props: ['localPanelId', 'path'],
   computed: {
     ...mapState('localPanel', ['panels']),
     title() {
       if (!this.$props.localPanelId) {
-        return `${this.$props.org}/${this.$props.repo}`;
+        return this.$props.path;
       }
       const panel = this.panels[this.$props.localPanelId];
       if (!panel) {
@@ -740,9 +741,9 @@ export default {
         }
         projects = Object.freeze(Object.values(panel.projects));
       } else {
-        projects = await this.$octoClient.loadEnabledProjectsFromRepo(
-          this.$props.org,
-          this.$props.repo
+        projects = await utils.loadProjectsByPath(
+          this.$props.path,
+          this.$octoClient
         );
       }
       // window.projects = JSON.stringify(projects, null, 4);

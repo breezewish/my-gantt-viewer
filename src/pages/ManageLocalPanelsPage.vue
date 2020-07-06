@@ -33,7 +33,12 @@
     </section>
     <section class="section" style="overflow-y: scroll;">
       <div class="container">
-        <b-collapse class="card" v-for="panel of panels" :key="panel.id" style="margin: 10px 0;">
+        <b-collapse
+          class="card"
+          v-for="panel of panels"
+          :key="panel.id"
+          style="margin: 10px 0;"
+        >
           <div slot="trigger" slot-scope="props" class="card-header">
             <p class="card-header-title">Panel: {{ panel.name }}</p>
             <a class="card-header-icon">
@@ -192,8 +197,8 @@
 import Vue from 'vue';
 import { mapMutations, mapState } from 'vuex';
 import { v4 as uuidv4 } from 'uuid';
-import gh from 'parse-github-url';
 import Ajv from 'ajv';
+import * as utils from '@/utils.js';
 
 const ajv = new Ajv();
 ajv.addMetaSchema(require('ajv/lib/refs/json-schema-draft-06.json'));
@@ -235,75 +240,13 @@ export default {
       });
     },
     handleProjectSourceChange(panelId, inputValue) {
-      if (inputValue.trim() === '') {
-        Vue.set(this.addProjectStates, panelId, null);
-        return;
-      }
-      {
-        // Example: https://github.com/orgs/pingcap/projects/8
-        const m = inputValue.match(
-          /github\.com\/orgs\/([-\w\d\.\_]+)\/projects\/(\d+)/
-        );
-        if (m) {
-          Vue.set(this.addProjectStates, panelId, {
-            type: 'org_project',
-            org: m[1],
-            project_num: parseInt(m[2]),
-          });
-          return;
-        }
-      }
-      {
-        // Example: https://github.com/tikv/tikv/projects/26
-        const m = inputValue.match(
-          /github\.com\/([-\w\d\.\_]+)\/([-\w\d\.\_]+)\/projects\/(\d+)/
-        );
-        if (m) {
-          Vue.set(this.addProjectStates, panelId, {
-            type: 'repo_project',
-            org: m[1],
-            repo: m[2],
-            project_num: parseInt(m[3]),
-          });
-          return;
-        }
-      }
-      {
-        // Example: pingcap
-        const m = inputValue.match(/^([\w\d\.]+)$/);
-        if (m) {
-          Vue.set(this.addProjectStates, panelId, {
-            type: 'org',
-            org: m[1],
-          });
-          return;
-        }
-      }
-      const r = gh(inputValue);
-      if (r.owner && !r.name) {
-        Vue.set(this.addProjectStates, panelId, {
-          type: 'org',
-          org: r.owner,
-        });
-      } else if (r.owner && r.name) {
-        if (r.owner === 'orgs') {
-          // Example: https://github.com/orgs/pingcap/projects
-          Vue.set(this.addProjectStates, panelId, {
-            type: 'org',
-            org: r.name,
-          });
-        } else {
-          Vue.set(this.addProjectStates, panelId, {
-            type: 'repo',
-            org: r.owner,
-            repo: r.name,
-          });
-        }
-      } else {
-        Vue.set(this.addProjectStates, panelId, null);
-      }
+      Vue.set(
+        this.addProjectStates,
+        panelId,
+        utils.parseProjectPath(inputValue)
+      );
     },
-    handleAddProjectFromInput(panelId) {
+    async handleAddProjectFromInput(panelId) {
       const addInfo = this.addProjectStates[panelId];
       if (!addInfo) {
         return;
@@ -311,26 +254,11 @@ export default {
       if (addInfo.loading) {
         return;
       }
-      switch (addInfo.type) {
-        case 'org':
-          this.addProjectFromOrg(panelId, addInfo);
-          break;
-        case 'repo':
-          this.addProjectFromRepo(panelId, addInfo);
-          break;
-        case 'org_project':
-          this.addProjectFromOrgProject(panelId, addInfo);
-          break;
-        case 'repo_project':
-          this.addProjectFromRepoProject(panelId, addInfo);
-          break;
-      }
-    },
-    async addProjectFromOrg(panelId, addInfo) {
       Vue.set(addInfo, 'loading', true);
       try {
-        const projects = await this.$octoClient.loadEnabledProjectsFromOrg(
-          addInfo.org
+        const projects = await utils.loadProjectsByParsedInfo(
+          addInfo,
+          this.$octoClient
         );
         this.addProjects({ id: panelId, projects });
         Vue.set(this.inputs, panelId, '');
@@ -340,53 +268,6 @@ export default {
       }
       Vue.set(addInfo, 'loading', false);
     },
-    async addProjectFromRepo(panelId, addInfo) {
-      Vue.set(addInfo, 'loading', true);
-      try {
-        const projects = await this.$octoClient.loadEnabledProjectsFromRepo(
-          addInfo.org,
-          addInfo.repo
-        );
-        this.addProjects({ id: panelId, projects });
-        Vue.set(this.inputs, panelId, '');
-        Vue.set(this.addProjectStates, panelId, null);
-      } catch (e) {
-        this.handleQueryError(e);
-      }
-      Vue.set(addInfo, 'loading', false);
-    },
-    async addProjectFromOrgProject(panelId, addInfo) {
-      Vue.set(addInfo, 'loading', true);
-      try {
-        const project = await this.$octoClient.getOrgProject(
-          addInfo.org,
-          addInfo.project_num
-        );
-        this.addProjects({ id: panelId, projects: [project] });
-        Vue.set(this.inputs, panelId, '');
-        Vue.set(this.addProjectStates, panelId, null);
-      } catch (e) {
-        this.handleQueryError(e);
-      }
-      Vue.set(addInfo, 'loading', false);
-    },
-    async addProjectFromRepoProject(panelId, addInfo) {
-      Vue.set(addInfo, 'loading', true);
-      try {
-        const project = await this.$octoClient.getRepoProject(
-          addInfo.org,
-          addInfo.repo,
-          addInfo.project_num
-        );
-        this.addProjects({ id: panelId, projects: [project] });
-        Vue.set(this.inputs, panelId, '');
-        Vue.set(this.addProjectStates, panelId, null);
-      } catch (e) {
-        this.handleQueryError(e);
-      }
-      Vue.set(addInfo, 'loading', false);
-    },
-    // handleRefreshProjectNames() {},
     handleImportPanel() {
       this.$buefy.dialog.prompt({
         animation: 'zoom-in',
