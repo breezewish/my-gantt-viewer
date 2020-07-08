@@ -1,4 +1,5 @@
 import { Http } from 'vue-resource';
+import * as utils from '@/utils.js';
 
 const FLAG_PROJECT_ENABLE = 'EnableGantt'.toLowerCase();
 
@@ -27,6 +28,44 @@ const QUERY_FRAG_PROJECT = `
 //     }
 //   }
 // }
+
+const QUERY_FRAG_ISSUE_OR_PR = `
+  id
+  assignees(first: 1) {
+    nodes {
+      login
+    }
+  }
+  author {
+    login
+  }
+  body
+  createdAt
+  closed
+  closedAt
+  number
+  url
+  viewerCanUpdate
+  title
+  state
+  repository {
+    nameWithOwner
+  }
+  milestone {
+    dueOn
+    id
+    title
+    url
+    state
+    number
+  }
+  labels(first: 10) {
+    nodes {
+      name
+      color
+    }
+  }
+`;
 
 class OctoClient {
   QUERY_FRAG_RATELIMIT = `
@@ -137,10 +176,12 @@ class OctoClient {
     return r;
   };
 
-  getRepoProject = async (org, repo, num) => {
+  loadRepoProjectByProjNum = async (org, repo, num) => {
+    console.log('Load repo project info: ', org, repo, num);
+
     const resp = await this.request(
       `
-      query getRepoProject($org: String!, $repo: String!, $num: Int!) {
+      query loadRepoProjectByProjNum($org: String!, $repo: String!, $num: Int!) {
         repository(name: $repo, owner: $org) {
           project(number: $num) {
             ${QUERY_FRAG_PROJECT}
@@ -157,16 +198,18 @@ class OctoClient {
     );
     if (!resp || !resp.repository) {
       console.log(resp);
-      throw new Error('Invalid getRepoProject response');
+      throw new Error('Invalid loadRepoProjectByProjNum response');
     }
-    console.log('getRepoProject rateLimit', resp.rateLimit);
+    console.log('loadRepoProjectByProjNum rateLimit', resp.rateLimit);
     return resp.repository.project;
   };
 
-  getOrgProject = async (org, num) => {
+  loadOrgProjectByProjNum = async (org, num) => {
+    console.log('Load org project info: ', org, num);
+
     const resp = await this.request(
       `
-      query getOrgProject($org: String!, $num: Int!) {
+      query loadOrgProjectByProjNum($org: String!, $num: Int!) {
         organization(login: $org) {
           project(number: $num) {
             ${QUERY_FRAG_PROJECT}
@@ -182,10 +225,193 @@ class OctoClient {
     );
     if (!resp || !resp.organization) {
       console.log(resp);
-      throw new Error('Invalid getOrgProject response');
+      throw new Error('Invalid loadOrgProjectByProjNum response');
     }
-    console.log('getOrgProject rateLimit', resp.rateLimit);
+    console.log('loadOrgProjectByProjNum rateLimit', resp.rateLimit);
     return resp.organization.project;
+  };
+
+  loadProjectItems = async projectIdArray => {
+    if (projectIdArray.length === 0) {
+      return [];
+    }
+
+    console.log('Load project items', projectIdArray);
+
+    // Currently only first 100 card in each column is supported..
+    const r = [];
+    const resp = await this.request(
+      `
+      query loadProjectItems($ids: [ID!]!){
+        projects: nodes(ids: $ids) {
+          ...on Project {
+            id
+            columns(first: 10) {
+              nodes {
+                id
+                name
+                cards(first: 100) {
+                  nodes {
+                    isArchived
+                    note
+                    content {
+                      __typename
+                      ... on PullRequest {
+                        ${QUERY_FRAG_ISSUE_OR_PR}
+                      }
+                      ... on Issue {
+                        ${QUERY_FRAG_ISSUE_OR_PR}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        ${this.QUERY_FRAG_RATELIMIT}
+      }
+    `,
+      {
+        ids: projectIdArray,
+      }
+    );
+    if (!resp || !resp.projects) {
+      throw new Error('Invalid loadProjectItems response');
+    }
+    console.log('loadProjectItems rateLimit', resp.rateLimit);
+    resp.projects.forEach(proj => {
+      proj.columns.nodes.forEach(column => {
+        column.cards.nodes.forEach(card => {
+          if (card.isArchived) {
+            return;
+          }
+          if (!card.note && !card.content?.id) {
+            // The card has either note or content
+            return;
+          }
+          r.push({
+            note: card.note,
+            content: card.content,
+            parentColumn: {
+              name: column.name,
+            },
+            parentProject: {
+              id: proj.id,
+            },
+          });
+        });
+      });
+    });
+    return r;
+  };
+
+  recursiveLoadProjectTree = async (
+    rootProjects,
+    fnIncTotal,
+    fnIncFinished
+  ) => {
+    console.group('recursiveLoadProjectTree');
+
+    async function wrapProjectWithParent(parentProjectId, promise) {
+      fnIncTotal?.();
+      const r = await promise;
+      r.parentProject = {
+        id: parentProjectId,
+      };
+      fnIncFinished?.();
+      return r;
+    }
+
+    let projects = rootProjects;
+    let depth = 0;
+    const r = [];
+    const idDedup = {};
+
+    while (projects.length > 0 && depth < 4) {
+      const projectIdArrayToLoadItems = [];
+      projects.forEach(p => {
+        if (idDedup[p.id]) {
+          return;
+        }
+        idDedup[p.id] = true;
+        r.push({
+          kind: 'project',
+          ...p,
+        });
+        projectIdArrayToLoadItems.push(p.id);
+      });
+
+      fnIncTotal?.();
+      const items = await this.loadProjectItems(projectIdArrayToLoadItems);
+      fnIncFinished?.();
+
+      const projectInfoArrayToLoadMeta = [];
+      items.forEach(i => {
+        if (i.note?.length > 0) {
+          const info = utils.parseDirectProjectLink(i.note);
+          if (!info) {
+            return;
+          }
+          info.parentProjectId = i.parentProject.id;
+          const infoId = JSON.stringify(info);
+          if (idDedup[infoId]) {
+            return;
+          }
+          idDedup[infoId] = true;
+          projectInfoArrayToLoadMeta.push(info);
+        } else if (i.content?.id) {
+          const issueOrPrNode = i.content;
+          if (idDedup[issueOrPrNode.id]) {
+            return;
+          }
+          idDedup[issueOrPrNode.id] = true;
+          r.push({
+            kind: 'issueOrPr',
+            parentColumn: i.parentColumn,
+            parentProject: i.parentProject,
+            ...issueOrPrNode,
+          });
+        }
+      });
+
+      const promises = [];
+      projectInfoArrayToLoadMeta.forEach(info => {
+        if (info.type === 'org_project') {
+          promises.push(
+            wrapProjectWithParent(
+              info.parentProjectId,
+              this.loadOrgProjectByProjNum(info.org, info.project_num)
+            )
+          );
+        } else if (info.type === 'repo_project') {
+          promises.push(
+            wrapProjectWithParent(
+              info.parentProjectId,
+              this.loadRepoProjectByProjNum(
+                info.org,
+                info.repo,
+                info.project_num
+              )
+            )
+          );
+        } else {
+          throw new Error('Unknown project info: ' + info.type);
+        }
+      });
+
+      if (promises.length === 0) {
+        break;
+      }
+
+      const leafProjects = await Promise.all(promises);
+      projects = leafProjects;
+      depth += 1;
+    }
+
+    console.groupEnd('recursiveLoadProjectTree');
+
+    return r;
   };
 }
 

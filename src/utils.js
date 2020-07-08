@@ -1,6 +1,6 @@
 import gh from 'parse-github-url';
 
-export function parseProjectPath(path) {
+export function parseDirectProjectLink(path) {
   if (path.trim() === '') {
     return null;
   }
@@ -30,6 +30,24 @@ export function parseProjectPath(path) {
       };
     }
   }
+
+  return null;
+}
+
+export function parseProjectPath(path) {
+  if (path.trim() === '') {
+    return null;
+  }
+
+  {
+    // Example: https://github.com/orgs/pingcap/projects/8
+    // Example: https://github.com/tikv/tikv/projects/26
+    const r = parseDirectProjectLink(path);
+    if (r) {
+      return r;
+    }
+  }
+
   {
     // Example: pingcap
     const m = path.match(/^([\w\d\.]+)$/);
@@ -83,14 +101,14 @@ export async function loadProjectsByParsedInfo(parsed, octoClient) {
         parsed.repo
       );
     case 'org_project': {
-      const project = await octoClient.getOrgProject(
+      const project = await octoClient.loadOrgProjectByProjNum(
         parsed.org,
         parsed.project_num
       );
       return [project];
     }
     case 'repo_project': {
-      const project = await octoClient.getRepoProject(
+      const project = await octoClient.loadRepoProjectByProjNum(
         parsed.org,
         parsed.repo,
         parsed.project_num

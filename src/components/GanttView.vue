@@ -30,9 +30,7 @@
       style="position: absolute; left: 0; top: 27px; bottom: 0; width: 100%;"
       @mouseover="handleGanttMouseOver"
     ></div>
-    <div
-      style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;"
-    >
+    <div style="position: absolute; left: 0; width: 100%; top: 0; height: 27px;">
       <div style="display: inline-block; margin: 0 10px;">
         <b-slider
           :tooltip="false"
@@ -50,45 +48,34 @@
         @click="zoomIn"
         :disabled="!canZoomIn"
         icon-left="plus"
-        >Zoom In</b-button
-      >
+      >Zoom In</b-button>
       <b-button
         size="is-small"
         type="is-text"
         @click="zoomOut"
         :disabled="!canZoomOut"
         icon-left="minus"
-        >Zoom Out</b-button
-      >
+      >Zoom Out</b-button>
       <b-button
         size="is-small"
         type="is-text"
         @click="collapseAll"
         icon-left="chevron-up"
-        >Collapse All</b-button
-      >
+      >Collapse All</b-button>
       <b-button
         size="is-small"
         type="is-text"
         @click="expandAll"
         icon-left="chevron-down"
-        >Expand All</b-button
-      >
-      <b-button
-        size="is-small"
-        type="is-text"
-        @click="reload"
-        icon-left="refresh"
-        >Reload</b-button
-      >
+      >Expand All</b-button>
+      <b-button size="is-small" type="is-text" @click="reload" icon-left="refresh">Reload</b-button>
       <b-button
         size="is-small"
         type="is-primary"
         @click="previewChanges"
         icon-left="check"
         :disabled="Object.keys(pendingTaskChanges).length === 0"
-        >Preview & Save</b-button
-      >
+      >Preview & Save</b-button>
     </div>
   </div>
 </template>
@@ -101,6 +88,7 @@ import 'dhtmlx-gantt/codebase/ext/dhtmlxgantt_marker.js';
 import moment from 'moment';
 import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
+import sortBy from 'lodash/sortBy';
 import Color from 'color';
 import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
 import * as utils from '@/utils.js';
@@ -752,7 +740,7 @@ export default {
       this.loadingFinished = 0;
     },
     async loadData() {
-      this.loadingAll = 2;
+      // this.loadingAll = 2;
 
       let projects = [];
       if (this.$props.localPanelId) {
@@ -765,149 +753,146 @@ export default {
         }
         projects = Object.freeze(Object.values(panel.projects));
       } else {
+        this.loadingAll = 1;
         projects = await utils.loadProjectsByPath(
           this.$props.path,
           this.$octoClient
         );
+        this.loadingFinished = 1;
       }
-      // window.projects = JSON.stringify(projects, null, 4);
-      // const projects = require('./mock_projects.json');
-      this.loadingFinished += 1;
-      const projectIdArray = projects.map(p => p.id);
-      if (projectIdArray.length == 0) {
-        return {
-          data: [],
-          links: [],
-        };
-      }
-      const items = await this.loadProjectItems(projectIdArray);
-      // window.items = JSON.stringify(items, null, 4);
-      // const items = require('./mock_items.json');
-      this.loadingFinished += 1;
+
+      const projectTree = await this.$octoClient.recursiveLoadProjectTree(
+        projects,
+        () => this.loadingAll++,
+        () => this.loadingFinished++
+      );
+      // const projectTree = sortBy(require('./mock_items.json'), [
+      //   'kind',
+      //   'name',
+      //   'content.state',
+      //   'content.repository.nameWithOwner',
+      //   'content.title',
+      // ]);
 
       const milestones = {};
+      const data = [];
 
-      // calculate gantt properties
-      items.forEach(item => {
-        item._ganttStart = moment(item.createdAt)
-          .startOf('day')
-          .toDate();
-        let m = item.body.match(FLAG_REGEX_ITEM_START);
-        if (m) {
-          // Override by start directive
-          item._ganttStart = moment(m[1], FLAG_DATE_FORMAT).toDate();
-        }
-
-        if (item.milestone && item.milestone.dueOn) {
-          item._ganttDue = moment(item.milestone.dueOn)
-            .endOf('day')
+      projectTree.forEach(item => {
+        if (item.kind === 'project') {
+          data.push({
+            id: item.id,
+            text: item.name,
+            type: 'project',
+            open: true,
+            readonly: true,
+            parent: item.parentProject?.id,
+            // progress:
+            //   projectProgresses.reduce((a, b) => {
+            //     return a + b._ganttProgress;
+            //   }, 0) / projectProgresses.length,
+            _src: item,
+          });
+        } else if (item.kind === 'issueOrPr') {
+          item._ganttStart = moment(item.createdAt)
+            .startOf('day')
             .toDate();
-        }
-        m = item.body.match(FLAG_REGEX_ITEM_DURATION);
-        if (m) {
-          // Override by duration directive
-          const days = parseInt(m[1]);
-          if (!Number.isNaN(days)) {
-            item._ganttDue = moment(item._ganttStart)
-              .add(parseInt(m[1]), 'd')
+          let m = item.body.match(FLAG_REGEX_ITEM_START);
+          if (m) {
+            // Override by start directive
+            item._ganttStart = moment(m[1], FLAG_DATE_FORMAT).toDate();
+          }
+
+          if (item.milestone && item.milestone.dueOn) {
+            item._ganttDue = moment(item.milestone.dueOn)
+              .endOf('day')
               .toDate();
           }
-        }
-        m = item.body.match(FLAG_REGEX_ITEM_DUE);
-        if (m) {
-          // Override by due directive
-          item._ganttDue = moment(m[1], FLAG_DATE_FORMAT).toDate();
-        }
-        if (!item._ganttDue) {
-          item._ganttDue = new Date(
-            item._ganttStart.valueOf() + 24 * 60 * 60 * 1000
-          );
-        }
-
-        item._ganttProgress = 0;
-        if (item.closed) {
-          // Closed items always have progress = 1.
-          item._ganttProgress = 1;
-        } else {
-          // Override by progress directive
-          m = item.body.match(FLAG_REGEX_ITEM_PROGRESS);
+          m = item.body.match(FLAG_REGEX_ITEM_DURATION);
           if (m) {
-            const progress = parseFloat(m[1]);
-            if (!Number.isNaN(progress)) {
-              item._ganttProgress = progress / 100;
+            // Override by duration directive
+            const days = parseInt(m[1]);
+            if (!Number.isNaN(days)) {
+              item._ganttDue = moment(item._ganttStart)
+                .add(parseInt(m[1]), 'd')
+                .toDate();
             }
           }
-        }
-
-        item._ganttAssignee = null;
-        if (item.__typename === 'Issue') {
-          if (item.assignees.nodes.length > 0) {
-            item._ganttAssignee = item.assignees.nodes[0].login;
+          m = item.body.match(FLAG_REGEX_ITEM_DUE);
+          if (m) {
+            // Override by due directive
+            item._ganttDue = moment(m[1], FLAG_DATE_FORMAT).toDate();
           }
-        } else {
-          // For PullRequests, show author as assignee.
-          item._ganttAssignee = item.author.login;
-        }
-
-        if (item.milestone) {
-          if (milestones[item.milestone.id] === undefined) {
-            milestones[item.milestone.id] = item.milestone;
+          if (!item._ganttDue) {
+            item._ganttDue = new Date(
+              item._ganttStart.valueOf() + 24 * 60 * 60 * 1000
+            );
           }
+
+          item._ganttProgress = 0;
+          if (item.closed) {
+            // Closed items always have progress = 1.
+            item._ganttProgress = 1;
+          } else {
+            // Override by progress directive
+            m = item.body.match(FLAG_REGEX_ITEM_PROGRESS);
+            if (m) {
+              const progress = parseFloat(m[1]);
+              if (!Number.isNaN(progress)) {
+                item._ganttProgress = progress / 100;
+              }
+            }
+          }
+
+          item._ganttAssignee = null;
+          if (item.__typename === 'Issue') {
+            if (item.assignees.nodes.length > 0) {
+              item._ganttAssignee = item.assignees.nodes[0].login;
+            }
+          } else {
+            // For PullRequests, show author as assignee.
+            item._ganttAssignee = item.author.login;
+          }
+
+          if (item.milestone) {
+            if (milestones[item.milestone.id] === undefined) {
+              milestones[item.milestone.id] = item.milestone;
+            }
+          }
+
+          data.push({
+            id: item.id,
+            text: `#${item.number} ${item.title}`,
+            type: 'task',
+            schedule: (function() {
+              if (item._ganttProgress === 1) {
+                return 'beyond-complete';
+              }
+
+              const now = Date.now();
+              if (Date.now() > item._ganttDue) {
+                return 'out-schedule';
+              }
+
+              const allDuration = item._ganttDue - item._ganttStart;
+              const lastDuration = Date.now() - item._ganttStart;
+              const expectedProgress = lastDuration / allDuration;
+
+              if (item._ganttProgress > expectedProgress) {
+                return 'beyond-schedule';
+              }
+              return 'on-schedule';
+            })(),
+            start_date: item._ganttStart,
+            end_date: item._ganttDue,
+            progress: item._ganttProgress,
+            parent: item.parentProject.id,
+            readonly: !item.viewerCanUpdate,
+            _src: item,
+          });
         }
       });
 
       gantt.clearAll();
-
-      const data = [];
-      projects.forEach(proj => {
-        const projectProgresses = items.filter(
-          item => item.projectId == proj.id
-        );
-        data.push({
-          id: proj.id,
-          text: proj.name,
-          type: 'project',
-          open: true,
-          readonly: true,
-          progress:
-            projectProgresses.reduce((a, b) => {
-              return a + b._ganttProgress;
-            }, 0) / projectProgresses.length,
-          _src: proj,
-        });
-      });
-      items.forEach(item => {
-        data.push({
-          id: item.id,
-          text: `#${item.number} ${item.title}`,
-          type: 'task',
-          schedule: (function() {
-            if (item._ganttProgress === 1) {
-              return 'beyond-complete';
-            }
-
-            const now = Date.now();
-            if (Date.now() > item._ganttDue) {
-              return 'out-schedule';
-            }
-
-            const allDuration = item._ganttDue - item._ganttStart;
-            const lastDuration = Date.now() - item._ganttStart;
-            const expectedProgress = lastDuration / allDuration;
-
-            if (item._ganttProgress > expectedProgress) {
-              return 'beyond-schedule';
-            }
-            return 'on-schedule';
-          })(),
-          start_date: item._ganttStart,
-          end_date: item._ganttDue,
-          progress: item._ganttProgress,
-          parent: item.projectId,
-          readonly: !item.viewerCanUpdate,
-          _src: item,
-        });
-      });
 
       gantt.parse({ data, links: [] });
       gantt.showDate(new Date());
@@ -961,115 +946,6 @@ export default {
         if (issue.viewerCanUpdate) {
           r.push(issue);
         }
-      });
-      return r;
-    },
-    async loadProjectItems(projectIdArray) {
-      // Currently only first 100 card in each column is supported..
-      const r = [];
-      const itemIds = {};
-      const queryFragItem = `
-        id
-        assignees(first: 1) {
-          nodes {
-            login
-          }
-        }
-        author {
-          login
-        }
-        body
-        createdAt
-        closed
-        closedAt
-        number
-        url
-        viewerCanUpdate
-        title
-        state
-        repository {
-          nameWithOwner
-        }
-        milestone {
-          dueOn
-          id
-          title
-          url
-          state
-          number
-        }
-        labels(first: 10) {
-          nodes {
-            name
-            color
-          }
-        }
-      `;
-      const resp = await this.$octoClient.request(
-        `
-        query loadProjectItems($ids: [ID!]!){
-          projects: nodes(ids: $ids) {
-            ...on Project {
-              id
-              columns(first: 10) {
-                nodes {
-                  id
-                  name
-                  cards(first: 100) {
-                    nodes {
-                      isArchived
-                      content {
-                        __typename
-                        ... on PullRequest {
-                          ${queryFragItem}
-                        }
-                        ... on Issue {
-                          ${queryFragItem}
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          ${this.$octoClient.QUERY_FRAG_RATELIMIT}
-        }
-      `,
-        {
-          ids: projectIdArray,
-        }
-      );
-      if (!resp || !resp.projects) {
-        throw new Error('Invalid loadProjectItems response');
-      }
-      console.log('loadProjectItems rateLimit', resp.rateLimit);
-      resp.projects.forEach(proj => {
-        proj.columns.nodes.forEach(column => {
-          column.cards.nodes.forEach(card => {
-            if (card.isArchived) {
-              return;
-            }
-            if (!card.content) {
-              return;
-            }
-            if (!card.content.id) {
-              return;
-            }
-            // Deduplicate
-            if (itemIds[card.content.id]) {
-              return;
-            }
-            itemIds[card.content.id] = true;
-            r.push({
-              ...card.content,
-              column: {
-                name: column.name,
-              },
-              projectId: proj.id,
-            });
-          });
-        });
       });
       return r;
     },
