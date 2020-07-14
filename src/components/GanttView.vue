@@ -766,6 +766,7 @@ export default {
         () => this.loadingAll++,
         () => this.loadingFinished++
       );
+      // console.log('projectTree', JSON.parse(JSON.stringify(projectTree)));
       // const projectTree = sortBy(require('./mock_items.json'), [
       //   'kind',
       //   'name',
@@ -773,43 +774,40 @@ export default {
       //   'content.repository.nameWithOwner',
       //   'content.title',
       // ]);
+      const projectTreeHierarchy = utils.projectTreeListToTree(projectTree);
 
       const milestones = {};
       const data = [];
 
+      // For root items, they should be opened by default
+      projectTreeHierarchy.forEach(item => {
+        item.open = true;
+      });
+
+      // Parse Gantt metadata specified in project / item body.
       projectTree.forEach(item => {
-        if (item.kind === 'project') {
-          data.push({
-            id: item.id,
-            text: item.name,
-            type: 'project',
-            open: true,
-            readonly: true,
-            parent: item.parentProject?.id,
-            // progress:
-            //   projectProgresses.reduce((a, b) => {
-            //     return a + b._ganttProgress;
-            //   }, 0) / projectProgresses.length,
-            _src: item,
-          });
-        } else if (item.kind === 'issueOrPr') {
+        if (item.createdAt) {
           item._ganttStart = moment(item.createdAt)
             .startOf('day')
             .toDate();
-          let m = item.body.match(FLAG_REGEX_ITEM_START);
+        }
+        {
+          const m = item.body.match(FLAG_REGEX_ITEM_START);
           if (m) {
             // Override by start directive
             item._ganttStart = moment(m[1], FLAG_DATE_FORMAT).toDate();
           }
+        }
 
-          if (item.milestone && item.milestone.dueOn) {
-            item._ganttDue = moment(item.milestone.dueOn)
-              .endOf('day')
-              .toDate();
-          }
-          m = item.body.match(FLAG_REGEX_ITEM_DURATION);
-          if (m) {
-            // Override by duration directive
+        if (item.milestone?.dueOn) {
+          item._ganttDue = moment(item.milestone.dueOn)
+            .endOf('day')
+            .toDate();
+        }
+        {
+          const m = item.body.match(FLAG_REGEX_ITEM_DURATION);
+          if (m && item._ganttStart) {
+            // Override by duration directive. Duration directive is only effective when start is specified.
             const days = parseInt(m[1]);
             if (!Number.isNaN(days)) {
               item._ganttDue = moment(item._ganttStart)
@@ -817,78 +815,154 @@ export default {
                 .toDate();
             }
           }
-          m = item.body.match(FLAG_REGEX_ITEM_DUE);
+        }
+        {
+          const m = item.body.match(FLAG_REGEX_ITEM_DUE);
           if (m) {
             // Override by due directive
             item._ganttDue = moment(m[1], FLAG_DATE_FORMAT).toDate();
           }
-          if (!item._ganttDue) {
+          if (!item._ganttDue && item._ganttStart) {
             item._ganttDue = new Date(
-              item._ganttStart.valueOf() + 24 * 60 * 60 * 1000
+              item._ganttStart.valueOf() + 3 * 24 * 60 * 60 * 1000
             );
           }
+        }
 
-          item._ganttProgress = 0;
-          if (item.closed) {
-            // Closed items always have progress = 1.
-            item._ganttProgress = 1;
+        if (item.closed) {
+          // Closed items always have progress = 1.
+          item._ganttProgress = 1;
+        } else {
+          // Override by progress directive
+          const m = item.body.match(FLAG_REGEX_ITEM_PROGRESS);
+          if (m) {
+            const progress = parseFloat(m[1]);
+            if (!Number.isNaN(progress)) {
+              item._ganttProgress = progress / 100;
+            }
+          }
+        }
+
+        item._ganttAssignee = null;
+        if (item.__typename === 'Issue') {
+          if (item.assignees?.nodes?.length > 0) {
+            item._ganttAssignee = item.assignees.nodes[0].login;
+          }
+        } else if (item.__typename === 'PullRequest') {
+          // For PullRequests, show author as assignee.
+          item._ganttAssignee = item.author?.login;
+        }
+
+        if (item.milestone) {
+          if (milestones[item.milestone.id] === undefined) {
+            milestones[item.milestone.id] = item.milestone;
+          }
+        }
+      });
+
+      // Calculate progress recursively if not specified explicitly
+      {
+        const dedupId = {};
+        function updateProgressForChildren(children) {
+          children.forEach(item => {
+            if (!item.id) {
+              console.warn('Unknown id for item', item);
+              return;
+            }
+            if (dedupId[item.id]) {
+              return;
+            }
+            dedupId[item.id] = true;
+            if (item._ganttProgress != null) {
+              // A progress is already specified, skip
+              return;
+            }
+            if (!item._children) {
+              // No children, skip
+              return;
+            }
+            let sum = 0;
+            updateProgressForChildren(item._children);
+            item._children.forEach(subItem => {
+              sum += subItem._ganttProgress || 0;
+            });
+            item._ganttProgress = sum / item._children.length;
+          });
+        }
+        updateProgressForChildren(projectTreeHierarchy);
+      }
+
+      // Assign on-schedule status
+      projectTree.forEach(item => {
+        if (item._ganttProgress === 1) {
+          item._ganttSchedule = 'beyond-complete';
+        } else if (item._ganttStart && item._ganttDue) {
+          const now = Date.now();
+          if (Date.now() > item._ganttDue) {
+            item._ganttSchedule = 'out-schedule';
           } else {
-            // Override by progress directive
-            m = item.body.match(FLAG_REGEX_ITEM_PROGRESS);
-            if (m) {
-              const progress = parseFloat(m[1]);
-              if (!Number.isNaN(progress)) {
-                item._ganttProgress = progress / 100;
-              }
+            const allDuration = item._ganttDue - item._ganttStart;
+            const lastDuration = Date.now() - item._ganttStart;
+            const expectedProgress = lastDuration / allDuration;
+
+            if ((item._ganttProgress || 0) > expectedProgress) {
+              item._ganttSchedule = 'beyond-schedule';
+            } else {
+              item._ganttSchedule = 'on-schedule';
             }
           }
+        }
+      });
 
-          item._ganttAssignee = null;
-          if (item.__typename === 'Issue') {
-            if (item.assignees.nodes.length > 0) {
-              item._ganttAssignee = item.assignees.nodes[0].login;
-            }
-          } else {
-            // For PullRequests, show author as assignee.
-            item._ganttAssignee = item.author.login;
-          }
-
-          if (item.milestone) {
-            if (milestones[item.milestone.id] === undefined) {
-              milestones[item.milestone.id] = item.milestone;
-            }
-          }
-
+      // Create tasks for each project item
+      projectTree.forEach(item => {
+        if (item.kind === 'issueOrPr') {
+          // For issueOrPr, _ganttStart and _ganttDue must exists.
           data.push({
             id: item.id,
             text: `#${item.number} ${item.title}`,
             type: 'task',
-            schedule: (function() {
-              if (item._ganttProgress === 1) {
-                return 'beyond-complete';
-              }
-
-              const now = Date.now();
-              if (Date.now() > item._ganttDue) {
-                return 'out-schedule';
-              }
-
-              const allDuration = item._ganttDue - item._ganttStart;
-              const lastDuration = Date.now() - item._ganttStart;
-              const expectedProgress = lastDuration / allDuration;
-
-              if (item._ganttProgress > expectedProgress) {
-                return 'beyond-schedule';
-              }
-              return 'on-schedule';
-            })(),
+            schedule: item._ganttSchedule,
             start_date: item._ganttStart,
             end_date: item._ganttDue,
-            progress: item._ganttProgress,
+            progress: item._ganttProgress || 0,
             parent: item.parentProject.id,
             readonly: !item.viewerCanUpdate,
             _src: item,
           });
+        }
+      });
+
+      // Create tasks for each project itself. This aggregates progress.
+      projectTree.forEach(item => {
+        if (item.kind === 'project') {
+          if (item._ganttStart && item._ganttDue) {
+            // A self managed project, create it as a task. It has own
+            data.push({
+              id: item.id,
+              text: item.name,
+              type: 'task',
+              open: item.open,
+              readonly: true, // Do not allow editing project start time end time for now
+              schedule: item._ganttSchedule,
+              start_date: item._ganttStart,
+              end_date: item._ganttDue,
+              parent: item.parentProject.id,
+              progress: item._ganttProgress || 0,
+              _src: item,
+            });
+          } else {
+            data.push({
+              id: item.id,
+              text: item.name,
+              type: 'project',
+              open: item.open,
+              readonly: true,
+              parent: item.parentProject?.id,
+              progress: item._ganttProgress || 0,
+              _src: item,
+            });
+          }
         }
       });
 

@@ -119,3 +119,31 @@ export async function loadProjectsByParsedInfo(parsed, octoClient) {
       return [];
   }
 }
+
+// Convert a project tree in the list hierarchy to a tree hierarchy.
+export function projectTreeListToTree(treeInList) {
+  const idMap = {};
+  let roots = [];
+  treeInList.forEach(item => {
+    if (item.id) {
+      idMap[item.id] = item;
+    }
+  });
+  treeInList.forEach(item => {
+    const parentId = item.parentProject?.id;
+    if (parentId) {
+      const parent = idMap[parentId];
+      if (parent != null) {
+        if (parent._children == null) {
+          parent._children = [];
+        }
+        parent._children.push(item);
+      } else {
+        console.warn('Cannot find parent project id', parentId);
+      }
+    } else {
+      roots.push(item);
+    }
+  });
+  return roots;
+}
