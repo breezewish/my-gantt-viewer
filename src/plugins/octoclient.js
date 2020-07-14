@@ -1,4 +1,5 @@
 import { Http } from 'vue-resource';
+import some from 'lodash/some';
 import * as utils from '@/utils.js';
 
 const FLAG_PROJECT_ENABLE = 'EnableGantt'.toLowerCase();
@@ -66,6 +67,8 @@ const QUERY_FRAG_ISSUE_OR_PR = `
     }
   }
 `;
+
+const FLAG_REGEX_ITEM_IGNORE = /GanttIgnoreColumn:\s*([^\n\-]+)/i;
 
 class OctoClient {
   QUERY_FRAG_RATELIMIT = `
@@ -329,6 +332,18 @@ class OctoClient {
     const idDedup = {};
 
     while (projects.length > 0 && depth < 4) {
+      const projectIgnoreColumnsByProjectId = {};
+      projects.forEach(proj => {
+        // Match ignore column directives
+        const m = proj.body.match(FLAG_REGEX_ITEM_IGNORE);
+        if (m) {
+          projectIgnoreColumnsByProjectId[proj.id] = m[1]
+            .trim()
+            .split(',')
+            .map(v => v.trim().toLowerCase());
+        }
+      });
+
       const projectIdArrayToLoadItems = [];
       projects.forEach(p => {
         if (idDedup[p.id]) {
@@ -364,6 +379,17 @@ class OctoClient {
           const issueOrPrNode = i.content;
           if (idDedup[issueOrPrNode.id]) {
             return;
+          }
+          if (i.parentProject) {
+            const ignoreColumns =
+              projectIgnoreColumnsByProjectId[i.parentProject.id];
+            if (ignoreColumns) {
+              if (
+                some(ignoreColumns, n => i.parentColumn.name.indexOf(n) > -1)
+              ) {
+                return;
+              }
+            }
           }
           idDedup[issueOrPrNode.id] = true;
           r.push({
