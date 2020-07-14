@@ -363,6 +363,17 @@ class OctoClient {
 
       const projectInfoArrayToLoadMeta = [];
       items.forEach(i => {
+        if (i.parentProject?.id && i.parentColumn?.name) {
+          const ignoreColumns =
+            projectIgnoreColumnsByProjectId[i.parentProject.id];
+          const name = i.parentColumn.name.toLowerCase();
+          if (ignoreColumns) {
+            if (some(ignoreColumns, n => name.indexOf(n) > -1)) {
+              return;
+            }
+          }
+        }
+
         if (i.note?.length > 0) {
           const info = utils.parseDirectProjectLink(i.note);
           if (!info) {
@@ -379,17 +390,6 @@ class OctoClient {
           const issueOrPrNode = i.content;
           if (idDedup[issueOrPrNode.id]) {
             return;
-          }
-          if (i.parentProject) {
-            const ignoreColumns =
-              projectIgnoreColumnsByProjectId[i.parentProject.id];
-            if (ignoreColumns) {
-              if (
-                some(ignoreColumns, n => i.parentColumn.name.indexOf(n) > -1)
-              ) {
-                return;
-              }
-            }
           }
           idDedup[issueOrPrNode.id] = true;
           r.push({
