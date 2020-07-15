@@ -795,7 +795,10 @@ export default {
           const m = item.body.match(FLAG_REGEX_ITEM_START);
           if (m) {
             // Override by start directive
-            item._ganttStart = moment(m[1], FLAG_DATE_FORMAT).toDate();
+            const d = moment(m[1], FLAG_DATE_FORMAT).toDate();
+            if (!isNaN(d.valueOf())) {
+              item._ganttStart = d;
+            }
           }
         }
 
@@ -810,9 +813,12 @@ export default {
             // Override by duration directive. Duration directive is only effective when start is specified.
             const days = parseInt(m[1]);
             if (!Number.isNaN(days)) {
-              item._ganttDue = moment(item._ganttStart)
+              const d = moment(item._ganttStart)
                 .add(parseInt(m[1]), 'd')
                 .toDate();
+              if (!isNaN(d.valueOf())) {
+                item._ganttDue = d;
+              }
             }
           }
         }
@@ -820,7 +826,10 @@ export default {
           const m = item.body.match(FLAG_REGEX_ITEM_DUE);
           if (m) {
             // Override by due directive
-            item._ganttDue = moment(m[1], FLAG_DATE_FORMAT).toDate();
+            const d = moment(m[1], FLAG_DATE_FORMAT).toDate();
+            if (!isNaN(d.valueOf())) {
+              item._ganttDue = d;
+            }
           }
           if (!item._ganttDue && item._ganttStart) {
             item._ganttDue = new Date(
