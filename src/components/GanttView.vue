@@ -798,6 +798,8 @@ export default {
             const d = moment(m[1], FLAG_DATE_FORMAT).toDate();
             if (!isNaN(d.valueOf())) {
               item._ganttStart = d;
+            } else {
+              console.warn('Invalid gantt start', item);
             }
           }
         }
@@ -818,6 +820,8 @@ export default {
                 .toDate();
               if (!isNaN(d.valueOf())) {
                 item._ganttDue = d;
+              } else {
+                console.warn('Invalid gantt due', item);
               }
             }
           }
@@ -829,6 +833,8 @@ export default {
             const d = moment(m[1], FLAG_DATE_FORMAT).toDate();
             if (!isNaN(d.valueOf())) {
               item._ganttDue = d;
+            } else {
+              console.warn('Invalid gantt due', item);
             }
           }
           if (!item._ganttDue && item._ganttStart) {

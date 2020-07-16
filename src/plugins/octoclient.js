@@ -1,5 +1,6 @@
 import { Http } from 'vue-resource';
 import some from 'lodash/some';
+import { ToastProgrammatic as Toast } from 'buefy';
 import * as utils from '@/utils.js';
 
 const FLAG_PROJECT_ENABLE = 'EnableGantt'.toLowerCase();
@@ -318,10 +319,28 @@ class OctoClient {
 
     async function wrapProjectWithParent(parentProjectId, promise) {
       fnIncTotal?.();
-      const r = await promise;
-      r.parentProject = {
-        id: parentProjectId,
-      };
+      let r;
+      try {
+        r = await promise;
+        r.parentProject = {
+          id: parentProjectId,
+        };
+      } catch (e) {
+        let msg;
+        if (e?.body?.msg) {
+          msg = e.body.msg;
+        } else {
+          msg = e.message;
+        }
+        Toast.open({
+          duration: 1000,
+          message: `Load project failed: ${msg}`,
+          position: 'is-bottom',
+          type: 'is-warning',
+          queue: false,
+        });
+        r = null;
+      }
       fnIncFinished?.();
       return r;
     }
@@ -431,7 +450,7 @@ class OctoClient {
       }
 
       const leafProjects = await Promise.all(promises);
-      projects = leafProjects;
+      projects = leafProjects.filter(v => v != null);
       depth += 1;
     }
 
