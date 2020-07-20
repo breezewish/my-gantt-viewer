@@ -1075,9 +1075,9 @@ export default {
   }
 
   &.kind-project {
-    background-color: rgba(#444, 0.3);
+    background-color: rgba(#722ed1, 0.7);
     .gantt_task_progress {
-      background-color: #444;
+      background-color: #531dab;
     }
     // &.gantt_selected {
     //   border: 1px solid #444;
@@ -1085,42 +1085,42 @@ export default {
   }
 
   &.kind-task-beyond-complete {
-    background-color: rgba($blue, 0.3);
+    background-color: rgba(#1890ff, 0.7);
     // &.gantt_selected {
     //   border: 1px solid $blue;
     // }
     .gantt_task_progress {
-      background-color: $blue;
+      background-color: #1890ff;
     }
   }
 
   &.kind-task-beyond-schedule {
-    background-color: rgba($green, 0.3);
+    background-color: rgba(#52c41a, 0.7);
     // &.gantt_selected {
     //   border: 1px solid $green;
     // }
     .gantt_task_progress {
-      background-color: $green;
+      background-color: #389e0d;
     }
   }
 
   &.kind-task-on-schedule {
-    background-color: rgba(247, 195, 0, 0.3);
+    background-color: rgba(#faad14, 0.7);
     // &.gantt_selected {
     //   border: 1px solid $orange;
     // }
     .gantt_task_progress {
-      background-color: rgb(247, 180, 17);
+      background-color: #d48806;
     }
   }
 
   &.kind-task-out-schedule {
-    background-color: rgba($red, 0.3);
+    background-color: rgba(#f5222d, 0.7);
     // &.gantt_selected {
     //   border: 1px solid $red;
     // }
     .gantt_task_progress {
-      background-color: rgba($red, 0.8);
+      background-color: #cf1322;
     }
   }
 }
