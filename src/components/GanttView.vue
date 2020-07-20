@@ -42,6 +42,14 @@
           @change="updateColumnWidth"
         />
       </div>
+      <div style="display: inline-block; margin: 0 10px; vertical-align: top;">
+        <b-input
+          size="is-small"
+          placeholder="Filter"
+          @input="handleFilterChange()"
+          v-model="filter"
+        ></b-input>
+      </div>
       <b-button
         size="is-small"
         type="is-text"
@@ -89,6 +97,8 @@ import moment from 'moment';
 import { html } from 'common-tags';
 import forEach from 'lodash/forEach';
 import sortBy from 'lodash/sortBy';
+import some from 'lodash/some';
+import debounce from 'lodash/debounce';
 import Color from 'color';
 import GanttChangePreviewDialog from './GanttChangePreviewDialog.vue';
 import * as utils from '@/utils.js';
@@ -134,6 +144,7 @@ export default {
       pendingTaskChanges: {},
       isPreviewChangeDialogVisible: false,
       isPreviewChangeDialogUpdating: false,
+      filter: '',
     };
   },
   async mounted() {
@@ -440,6 +451,9 @@ export default {
     this.lastTask = null;
   },
   methods: {
+    handleFilterChange: debounce(function() {
+      this.applyGanttFromProjects();
+    }, 500),
     setLastTask(task) {
       this.lastTask = {
         start_date: task.start_date.valueOf(),
@@ -739,41 +753,12 @@ export default {
       this.loadingAll = 0;
       this.loadingFinished = 0;
     },
-    async loadData() {
-      // this.loadingAll = 2;
-
-      let projects = [];
-      if (this.$props.localPanelId) {
-        const panel = this.panels[this.$props.localPanelId];
-        if (!panel) {
-          this.$buefy.dialog.alert(
-            `Local panel ${this.$props.localPanelId} does not exist.`
-          );
-          return;
-        }
-        projects = Object.freeze(Object.values(panel.projects));
-      } else {
-        this.loadingAll = 1;
-        projects = await utils.loadProjectsByPath(
-          this.$props.path,
-          this.$octoClient
-        );
-        this.loadingFinished = 1;
+    applyGanttFromProjects() {
+      if (!this.projectTree) {
+        return;
       }
 
-      const projectTree = await this.$octoClient.recursiveLoadProjectTree(
-        projects,
-        () => this.loadingAll++,
-        () => this.loadingFinished++
-      );
-      // console.log('projectTree', JSON.parse(JSON.stringify(projectTree)));
-      // const projectTree = sortBy(require('./mock_items.json'), [
-      //   'kind',
-      //   'name',
-      //   'content.state',
-      //   'content.repository.nameWithOwner',
-      //   'content.title',
-      // ]);
+      const projectTree = this.projectTree;
       const projectTreeHierarchy = utils.projectTreeListToTree(projectTree);
 
       const milestones = {};
@@ -929,8 +914,62 @@ export default {
         }
       });
 
+      const filters = this.filter
+        .trim()
+        .split(' ')
+        .map(v => v.trim().toLowerCase());
+
+      let filteredProjectTree = projectTree;
+
+      this.filter
+        .trim()
+        .split(' ')
+        .forEach(fx => {
+          const filter = fx.trim().toLowerCase();
+          if (filter.length === 0) {
+            return;
+          }
+          filteredProjectTree = filteredProjectTree.filter(item => {
+            if (item.kind === 'issueOrPr') {
+              if (item.parentColumn?.name?.toLowerCase().indexOf(filter) > -1) {
+                return true;
+              }
+              if (item.title?.toLowerCase().indexOf(filter) > -1) {
+                return true;
+              }
+              if (item.milestone?.title?.toLowerCase().indexOf(filter) > -1) {
+                return true;
+              }
+              if (
+                item.repository?.nameWithOwner?.toLowerCase().indexOf(filter) >
+                -1
+              ) {
+                return true;
+              }
+              if (item.assignees?.nodes?.length > 0) {
+                for (const n of item.assignees.nodes) {
+                  if (n?.login?.toLowerCase().indexOf(filter) > -1) {
+                    return true;
+                  }
+                }
+              }
+              if (item.labels?.nodes?.length > 0) {
+                for (const n of item.labels.nodes) {
+                  if (n?.name?.toLowerCase().indexOf(filter) > -1) {
+                    return true;
+                  }
+                }
+              }
+            }
+            if (item.kind === 'project') {
+              return true;
+            }
+            return false;
+          });
+        });
+
       // Create tasks for each project item
-      projectTree.forEach(item => {
+      filteredProjectTree.forEach(item => {
         if (item.kind === 'issueOrPr') {
           // For issueOrPr, _ganttStart and _ganttDue must exists.
           data.push({
@@ -948,8 +987,8 @@ export default {
         }
       });
 
-      // Create tasks for each project itself. This aggregates progress.
-      projectTree.forEach(item => {
+      // Create tasks for each project itself.
+      filteredProjectTree.forEach(item => {
         if (item.kind === 'project') {
           if (item._ganttStart && item._ganttDue) {
             // A self managed project, create it as a task. It has own
@@ -999,6 +1038,44 @@ export default {
           css: 'normal',
         });
       });
+    },
+    async loadData() {
+      // this.loadingAll = 2;
+
+      let projects = [];
+      if (this.$props.localPanelId) {
+        const panel = this.panels[this.$props.localPanelId];
+        if (!panel) {
+          this.$buefy.dialog.alert(
+            `Local panel ${this.$props.localPanelId} does not exist.`
+          );
+          return;
+        }
+        projects = Object.freeze(Object.values(panel.projects));
+      } else {
+        this.loadingAll = 1;
+        projects = await utils.loadProjectsByPath(
+          this.$props.path,
+          this.$octoClient
+        );
+        this.loadingFinished = 1;
+      }
+
+      const projectTree = await this.$octoClient.recursiveLoadProjectTree(
+        projects,
+        () => this.loadingAll++,
+        () => this.loadingFinished++
+      );
+      // console.log('projectTree', JSON.parse(JSON.stringify(projectTree)));
+      // const projectTree = sortBy(require('./mock_items.json'), [
+      //   'kind',
+      //   'name',
+      //   'content.state',
+      //   'content.repository.nameWithOwner',
+      //   'content.title',
+      // ]);
+      this.projectTree = projectTree;
+      this.applyGanttFromProjects();
     },
     async loadIssues(issueIdArray) {
       // This function is used to re-fetch body before update, to avoid overriding contents.
