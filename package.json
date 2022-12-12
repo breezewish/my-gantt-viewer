@@ -24,7 +24,7 @@
     "core-js": "^3.6.4",
     "dhtmlx-gantt": "^6.3.7",
     "dotenv": "^8.2.0",
-    "express": "^4.15.2",
+    "express": "^4.17.3",
     "lodash": "^4.17.19",
     "moment": "^2.24.0",
     "parse-github-url": "^1.0.2",
